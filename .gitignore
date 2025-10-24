@@ -1,0 +1,12 @@
+# .gitignore
+
+# Virtual Environment: Never commit this folder
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# IDE/Editor specific configuration
+.vscode/
+.idea/
