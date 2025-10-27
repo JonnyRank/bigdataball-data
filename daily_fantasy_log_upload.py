@@ -32,7 +32,7 @@ def initialize_database():
             text(
                 f"""
             CREATE TABLE IF NOT EXISTS {PLAYERS_TABLE_NAME} (
-                "PLAYER ID" INTEGER PRIMARY KEY,
+                "PLAYER_ID" INTEGER PRIMARY KEY,
                 "PLAYER_NAME" TEXT
             );
             """
@@ -164,9 +164,9 @@ def main():
                 ].drop_duplicates(subset=["PLAYER_ID"])
 
                 existing_players_df = pd.read_sql(
-                    f'SELECT "PLAYER ID" FROM {PLAYERS_TABLE_NAME}', engine
+                    f'SELECT "PLAYER_ID" FROM {PLAYERS_TABLE_NAME}', engine
                 )
-                existing_ids = set(existing_players_df["PLAYER ID"])
+                existing_ids = set(existing_players_df["PLAYER_ID"])
 
                 truly_new_players_df_for_dim = new_players_df.loc[
                     ~new_players_df["PLAYER_ID"].isin(existing_ids)
@@ -177,8 +177,8 @@ def main():
                         f"Adding {len(truly_new_players_df_for_dim)} new players to {PLAYERS_TABLE_NAME}..."
                     )
                     truly_new_players_df_renamed = truly_new_players_df_for_dim.rename(
-                        columns={"PLAYER_ID": "PLAYER ID", "PLAYER": "PLAYER_NAME"}
-                    )
+                        columns={"PLAYER": "PLAYER_NAME"}
+                    ).rename(columns={"PLAYER_ID": "PLAYER_ID"})
                     truly_new_players_df_renamed.to_sql(
                         PLAYERS_TABLE_NAME, con=engine, if_exists="append", index=False
                     )

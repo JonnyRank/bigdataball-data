@@ -19,9 +19,9 @@ SELECT
     AVG(fl.DK_SALARY) AS AVG_SAL,
     -- New calculated fields
     SUM(CASE WHEN fl.STARTED = 'Y' THEN 1 ELSE 0 END) AS GS, -- Games Started
-    AVG(CASE WHEN fl.STARTED = 'Y' THEN fl.MINUTES ELSE NULL END) AS AVG_MINS_GS, -- Average minutes in games started
-    SUM(fl.DK_POINTS) / SUM(fl.MINUTES) AS FPPM, -- Fantasy Points Per Minute (overall)
-    SUM(CASE WHEN fl.STARTED = 'Y' THEN fl.DK_POINTS ELSE 0 END) / SUM(CASE WHEN fl.STARTED = 'Y' THEN fl.MINUTES ELSE NULL END) AS FPPM_GS -- FPPM in games started
+    IFNULL(AVG(CASE WHEN fl.STARTED = 'Y' THEN fl.MINUTES ELSE NULL END), 0) AS AVG_MINS_GS, -- Average minutes in games started
+    IFNULL(SUM(fl.DK_POINTS) / SUM(fl.MINUTES), 0) AS FPPM, -- Fantasy Points Per Minute (overall)
+    IFNULL(SUM(CASE WHEN fl.STARTED = 'Y' THEN fl.DK_POINTS ELSE 0 END) / SUM(CASE WHEN fl.STARTED = 'Y' THEN fl.MINUTES ELSE NULL END), 0) AS FPPM_GS -- FPPM in games started
 FROM
     fantasy_logs fl
 LEFT JOIN
