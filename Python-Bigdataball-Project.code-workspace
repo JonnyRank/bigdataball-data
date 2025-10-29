@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../bigdataball"
+		}
+	],
+	"settings": {
+		"sqltools.useNodeRuntime": true
+	}
+}
