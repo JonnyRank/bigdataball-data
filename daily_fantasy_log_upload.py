@@ -4,6 +4,7 @@
 # 2. Create a table for dfs logs and a table for player name standardization
 # 3. Upload daily dfs logs - extracting only the logs which are not yet present in the dfs logs table
 #    and consolidating player naming convention changes into the players dimension
+# 4. Re-create database views after data is loaded.
 import pandas as pd
 from sqlalchemy import create_engine, text
 import glob
@@ -11,7 +12,9 @@ import os
 
 # --- 1. Configuration ---
 # NOTE: The user has specified this absolute path.
-BASE_PROJECT_PATH = "C:/Users/jrank/OneDrive/Documents/bigdataball"
+# Use the script's directory to build relative paths
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+BASE_PROJECT_PATH = os.path.join(PROJECT_ROOT, "..", "bigdataball")
 NEW_FILES_FOLDER = os.path.join(BASE_PROJECT_PATH, "Daily_Fantasy_Logs")
 PROCESSED_FOLDER = os.path.join(BASE_PROJECT_PATH, "Archived_Fantasy_Logs")
 DB_PATH = os.path.join(BASE_PROJECT_PATH, "nba_fantasy_logs.db")
@@ -40,7 +43,7 @@ def initialize_database():
         )
         # Also ensure the main logs table exists
         conn.commit()
-
+        
 
 def main():
     """
