@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 import os
 import numpy as np
 
@@ -44,7 +44,7 @@ def create_fantasy_averages_table():
             )
             if available_tables:
                 print(f"Available tables are: {available_tables}")
-            return  # Stop execution
+            return False  # Stop execution
 
         # --- Step 1: Load and Join Data ---
         df = pd.read_sql_table(LOGS_TABLE_NAME, engine)
@@ -150,8 +150,17 @@ def create_fantasy_averages_table():
 
         # Group by season, player, and team, then aggregate
         # Per user request: SEASON_TYPE, PLAYER, SEASON_KEY, TEAM_ABBREVIATION
+        # Adding PLAYER_ID to the grouping to preserve it as a unique identifier.
         grouped = (
-            df.groupby(["SEASON_TYPE", "PLAYER", "SEASON_KEY", "TEAM_ABBREVIATION"])
+            df.groupby(
+                [
+                    "SEASON_TYPE",
+                    "PLAYER_ID",
+                    "PLAYER",
+                    "SEASON_KEY",
+                    "TEAM_ABBREVIATION",
+                ]
+            )
             .agg(aggregations)
             .reset_index()
         )
@@ -162,6 +171,7 @@ def create_fantasy_averages_table():
         # --- Step 4: Clean Up and Save ---
         # Rename columns to match our desired schema
         rename_map = {
+            "PLAYER_ID_": "PLAYER_ID",
             "SEASON_TYPE_": "SEASON_TYPE",
             "PLAYER_": "PLAYER",
             "SEASON_KEY_": "SEASON",
@@ -207,7 +217,7 @@ def create_fantasy_averages_table():
         )  # Use fillna(0) to replace any NaN from std dev on single games
 
         # Convert columns that should be whole numbers to integer type
-        integer_columns = ['GP', 'GS', 'SALPG']
+        integer_columns = ["PLAYER_ID", "GP", "GS", "SALPG"]
         for col in integer_columns:
             final_df[col] = final_df[col].astype(int)
 
@@ -216,12 +226,54 @@ def create_fantasy_averages_table():
         print(
             f"Successfully created/updated '{AVERAGES_TABLE_NAME}' table with {len(final_df)} rows."
         )
-        # Note: The PLAYER_ID column is not included in the final output because it was not in the groupby list.
-        # The PLAYER column is used for grouping instead.
+        return True
 
     except Exception as e:
         print(f"\n*** An error occurred: {e} ***")
+        return False
+
+
+def create_convenience_views():
+    """
+    Creates simple database views on top of the fantasy_averages table
+    for easy access to regular season and playoff data.
+    """
+    print("\n--- Creating convenience views ---")
+
+    # Define the view names
+    reg_season_view_name = "vw_player_averages_regular_season"
+    playoffs_view_name = "vw_player_averages_playoffs"
+
+    # SQL statements for Regular Season View
+    drop_reg_season_sql = f"DROP VIEW IF EXISTS {reg_season_view_name};"
+    create_reg_season_sql = f"""
+    CREATE VIEW vw_player_averages_regular_season AS
+    SELECT *
+    FROM {AVERAGES_TABLE_NAME}
+    WHERE SEASON_TYPE = 'Regular';
+    """
+
+    # SQL for Playoffs View
+    drop_playoffs_sql = f"DROP VIEW IF EXISTS {playoffs_view_name};"
+    create_playoffs_sql = f"""
+    CREATE VIEW vw_player_averages_playoffs AS
+    SELECT *
+    FROM {AVERAGES_TABLE_NAME}
+    WHERE SEASON_TYPE = 'Playoffs';
+    """
+
+    # Execute each statement separately
+    with engine.connect() as connection:
+        connection.execute(text(drop_reg_season_sql))
+        connection.execute(text(create_reg_season_sql))
+        print(f"Successfully created/updated '{reg_season_view_name}'.")
+        connection.execute(text(drop_playoffs_sql))
+        connection.execute(text(create_playoffs_sql))
+        print(f"Successfully created/updated '{playoffs_view_name}'.")
+        connection.commit()
+    print("--- View creation complete ---")
 
 
 if __name__ == "__main__":
-    create_fantasy_averages_table()
+    if create_fantasy_averages_table():
+        create_convenience_views()
