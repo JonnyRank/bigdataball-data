@@ -15,6 +15,7 @@ LOGS_TABLE_NAME = "fantasy_logs"
 MAP_TEAMS_TABLE_NAME = "map_teams"
 DIM_PLAYERS_TABLE_NAME = "dim_players"
 AVERAGES_TABLE_NAME = "fantasy_averages"
+CSV_EXPORT_DIR = os.path.join(DB_DIRECTORY, "csv_exports")
 engine = create_engine(f"sqlite:///{DB_PATH}")
 
 
@@ -274,6 +275,40 @@ def create_convenience_views():
     print("--- View creation complete ---")
 
 
+def export_views_to_csv():
+    """
+    Reads data from the database views and exports them to CSV files.
+    """
+    print("\n--- Exporting views to CSV ---")
+
+    # Ensure the export directory exists
+    os.makedirs(CSV_EXPORT_DIR, exist_ok=True)
+    print(f"CSV files will be saved in: {CSV_EXPORT_DIR}")
+
+    # Define view names and corresponding output file names
+    views_to_export = {
+        "vw_player_averages_regular_season": "player_averages_regular_season.csv",
+        "vw_player_averages_playoffs": "player_averages_playoffs.csv",
+    }
+
+    try:
+        for view_name, file_name in views_to_export.items():
+            # Construct the full path for the output file
+            output_path = os.path.join(CSV_EXPORT_DIR, file_name)
+
+            # Read the view data into a pandas DataFrame
+            df = pd.read_sql_query(f"SELECT * FROM {view_name}", engine)
+
+            # Save the DataFrame to a CSV file, without the pandas index
+            df.to_csv(output_path, index=False)
+            print(f"Successfully exported '{view_name}' to '{file_name}'.")
+
+        print("--- CSV export complete ---")
+    except Exception as e:
+        print(f"\n*** An error occurred during CSV export: {e} ***")
+
+
 if __name__ == "__main__":
     if create_fantasy_averages_table():
         create_convenience_views()
+        export_views_to_csv()
