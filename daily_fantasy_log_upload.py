@@ -9,6 +9,8 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import glob
 import os
+import create_summary_tables
+
 
 # --- 1. Configuration ---
 # NOTE: The user has specified this absolute path.
@@ -215,6 +217,11 @@ def main():
             break
 
     print("\n--- All new files processed. ---")
+
+    # --- Run the summary and export pipeline automatically ---
+    print("\nStarting automatic summary generation...")
+    create_summary_tables.run_summary_pipeline()
+    print("\nAutomatic summary generation complete.")
 
 
 if __name__ == "__main__":

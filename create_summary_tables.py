@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, inspect, text
+from datetime import datetime
 import os
 import numpy as np
 
@@ -291,24 +292,37 @@ def export_views_to_csv():
         "vw_player_averages_playoffs": "player_averages_playoffs.csv",
     }
 
+    # Generate a single timestamp for all files in this run
+    timestamp = datetime.now().strftime("%m-%d-%Y_%H%M%S")
+
     try:
-        for view_name, file_name in views_to_export.items():
+        for view_name, base_file_name in views_to_export.items():
+            # Split the base filename into name and extension
+            name_part, extension = os.path.splitext(base_file_name)
+            # Create the new filename with the timestamp
+            new_file_name = f"{name_part}_{timestamp}{extension}"
+
             # Construct the full path for the output file
-            output_path = os.path.join(CSV_EXPORT_DIR, file_name)
+            output_path = os.path.join(CSV_EXPORT_DIR, new_file_name)
 
             # Read the view data into a pandas DataFrame
             df = pd.read_sql_query(f"SELECT * FROM {view_name}", engine)
 
             # Save the DataFrame to a CSV file, without the pandas index
             df.to_csv(output_path, index=False)
-            print(f"Successfully exported '{view_name}' to '{file_name}'.")
+            print(f"Successfully exported '{view_name}' to '{new_file_name}'.")
 
         print("--- CSV export complete ---")
     except Exception as e:
         print(f"\n*** An error occurred during CSV export: {e} ***")
 
 
-if __name__ == "__main__":
+def run_summary_pipeline():
+    """Runs the full data summary and export pipeline."""
     if create_fantasy_averages_table():
         create_convenience_views()
         export_views_to_csv()
+
+
+if __name__ == "__main__":
+    run_summary_pipeline()
