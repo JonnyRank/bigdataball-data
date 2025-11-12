@@ -141,13 +141,13 @@ def create_fantasy_averages_table():
             "DATE": "count",  # This will be renamed to GP
             "STARTED": lambda x: (x == "Y").sum(),  # This will be renamed to GS
             "DK_SALARY": "mean",
-            "DK_POINTS": ["mean", "std"],
-            "MINUTES": ["mean", "std"],
-            "GAME_FPPM": ["mean", "std"],
+            "DK_POINTS": ["mean", "std", "sum"],
+            "MINUTES": ["mean", "std", "sum"],
+            "GAME_FPPM": "std",  # Only need std dev of per-game FPPM for volatility
             "USAGE": "mean",
-            "GS_DK_POINTS": ["mean", "std"],
-            "GS_MINUTES": ["mean", "std"],
-            "GS_GAME_FPPM": ["mean", "std"],
+            "GS_DK_POINTS": ["mean", "std", "sum"],
+            "GS_MINUTES": ["mean", "std", "sum"],
+            "GS_GAME_FPPM": "std",  # Only need std dev of per-game FPPM for volatility
         }
 
         # Group by season, player, and team, then aggregate
@@ -170,6 +170,20 @@ def create_fantasy_averages_table():
         # Flatten the multi-level column names (e.g., ('DK_POINTS', 'mean') -> 'DK_POINTS_mean')
         grouped.columns = ["_".join(col).strip() for col in grouped.columns.values]
 
+        # --- Step 3.5: Calculate Correct FPPM Metrics Post-Aggregation ---
+        # The correct FPPM is sum of points / sum of minutes, not the average of game-by-game FPPMs.
+        # Handle division by zero for players with 0 total minutes.
+        grouped["FPPM"] = (
+            (grouped["DK_POINTS_sum"] / grouped["MINUTES_sum"])
+            .replace([np.inf, -np.inf], 0)
+            .fillna(0)
+        )
+        grouped["GSFPPM"] = (
+            (grouped["GS_DK_POINTS_sum"] / grouped["GS_MINUTES_sum"])
+            .replace([np.inf, -np.inf], 0)
+            .fillna(0)
+        )
+
         # --- Step 4: Clean Up and Save ---
         # Rename columns to match our desired schema
         rename_map = {
@@ -185,15 +199,13 @@ def create_fantasy_averages_table():
             "DK_POINTS_std": "STDV_FPPG",
             "MINUTES_mean": "MPG",
             "MINUTES_std": "STDV_MPG",
-            "GAME_FPPM_mean": "FPPM",
-            "GAME_FPPM_std": "STDV_FPPM",
+            "GAME_FPPM_std": "STDV_FPPM",  # This is the volatility of per-game FPPM
             "USAGE_mean": "USG",
             "GS_DK_POINTS_mean": "GSFPPG",
             "GS_DK_POINTS_std": "STDV_GSFPPG",
             "GS_MINUTES_mean": "GSMPG",
             "GS_MINUTES_std": "STDV_GSMPG",
-            "GS_GAME_FPPM_mean": "GSFPPM",
-            "GS_GAME_FPPM_std": "STDV_GSFPPM",
+            "GS_GAME_FPPM_std": "STDV_GSFPPM",  # This is the volatility of per-game FPPM as a starter
         }
         final_df = grouped.rename(columns=rename_map)
 
