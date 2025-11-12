@@ -45,7 +45,7 @@ def initialize_database():
         )
         # Also ensure the main logs table exists
         conn.commit()
-        
+
 
 def main():
     """
