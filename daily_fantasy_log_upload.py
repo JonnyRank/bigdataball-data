@@ -13,15 +13,24 @@ import create_summary_tables
 
 
 # --- 1. Configuration ---
-# NOTE: The user has specified this absolute path.
-# Use the script's directory to build relative paths
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-BASE_PROJECT_PATH = os.path.join(PROJECT_ROOT, "..", "bigdataball")
-NEW_FILES_FOLDER = os.path.join(BASE_PROJECT_PATH, "Daily_Fantasy_Logs")
-PROCESSED_FOLDER = os.path.join(BASE_PROJECT_PATH, "Archived_Fantasy_Logs")
-DB_PATH = os.path.join(BASE_PROJECT_PATH, "nba_fantasy_logs.db")
 
-# Ensure the processed folder exists, creating it if necessary.
+# HARDCODED PATHS FOR MIGRATION
+# Check if Google Drive (G:) exists
+if os.path.exists(r"G:\My Drive"):
+    # UPDATE THIS: Ensure this matches exactly where you moved the "My Data Sources" content
+    BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
+else:
+    # Fallback for non-synced machines
+    BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+
+# Define specific paths based on the Base Data Path
+NEW_FILES_FOLDER = os.path.join(BASE_DATA_PATH, "Daily_Fantasy_Logs")
+PROCESSED_FOLDER = os.path.join(BASE_DATA_PATH, "Archived_Fantasy_Logs")
+DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
+
+# Ensure the processed folder exists
+os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # Database Configuration

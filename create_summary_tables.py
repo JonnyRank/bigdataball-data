@@ -5,18 +5,28 @@ import os
 import numpy as np
 
 # --- 1. Configuration ---
-# The database is located in a sibling directory called 'bigdataball'.
-DB_DIRECTORY = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "bigdataball")
-)
-DB_PATH = os.path.join(DB_DIRECTORY, "nba_fantasy_logs.db")
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# HARDCODED PATHS FOR MIGRATION
+# Check if Google Drive (G:) exists
+if os.path.exists(r"G:\My Drive"):
+    # UPDATE THIS: Must match the folder name you used in the previous script
+    BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
+else:
+    # Fallback for non-synced machines (looks for a local 'Data' folder)
+    BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+
+# Define specific paths
+DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
+CSV_EXPORT_DIR = os.path.join(BASE_DATA_PATH, "csv_exports")
 
 # Database Configuration
 LOGS_TABLE_NAME = "fantasy_logs"
 MAP_TEAMS_TABLE_NAME = "map_teams"
 DIM_PLAYERS_TABLE_NAME = "dim_players"
 AVERAGES_TABLE_NAME = "fantasy_averages"
-CSV_EXPORT_DIR = os.path.join(DB_DIRECTORY, "csv_exports")
+
+# Initialize Engine
 engine = create_engine(f"sqlite:///{DB_PATH}")
 
 
