@@ -10,7 +10,7 @@ WITH logs_with_season AS (
             WHEN SEASON_SEGMENT LIKE '%In-Season Tournament%' THEN SUBSTR(SEASON_SEGMENT, 5, 4) || '-' || SUBSTR(CAST(SUBSTR(SEASON_SEGMENT, 5, 4) AS INTEGER) + 1, 3, 2)
         END AS SEASON_KEY
     FROM
-        player_logs
+        fantasy_logs
     WHERE
         SEASON_SEGMENT LIKE '%Regular Season%' OR SEASON_SEGMENT LIKE '%In-Season Tournament%'
 )
@@ -20,14 +20,15 @@ SELECT
     mt.TEAM_ABBREVIATION AS TEAM,
     lws.VENUE,
     COUNT(lws.GAME_ID) AS GP,
-    ROUND(AVG(lws.AST), 1) AS APG
+    ROUND(sum(lws.DK_POINTS), 2) AS DKPPG,
+    round(sum(lws.MINUTES),1) AS MINS
 FROM
     logs_with_season lws
 LEFT JOIN dim_players dp ON lws.PLAYER_ID = dp.PLAYER_ID
 LEFT JOIN map_teams mt ON lws.TEAM = mt.RAW_TEAM_NAME
 WHERE
-    dp.PLAYER_NAME = 'Nikola Jokic'
+    dp.PLAYER_NAME = 'Jalen Johnson' AND lws.DATE > '2025-10-30'
 GROUP BY
-    SEASON, VENUE
+    SEASON
 ORDER BY
     SEASON DESC;
