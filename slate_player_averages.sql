@@ -1,7 +1,7 @@
 -- SQLite
 select SEASON, PLAYER, TEAM, GP, GS, MPG, GSMPG, FPPG, GSFPPG, FPPM, GSFPPM, STDV_FPPG as STDV
 from vw_player_averages_regular_season
-where SEASON in ('2024-25', '2025-26')
+where (SEASON = '2024-25' and GP > 20) or SEASON = '2025-26'
 and (TEAM in ('CHA', 'ATL', 'BKN', 'TOR', 'ORL', 'LAC', 'CLE', 'POR', 'OKC', 
 'LAL', 'UTA', 'SAS', 'PHX')
 or PLAYER in ('Anfernee Simons', 'Luka Garza', 'Collin Sexton', 'De''Andre Hunter', 'Larry Nance Jr.', 
