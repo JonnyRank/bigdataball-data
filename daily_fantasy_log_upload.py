@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 import glob
 import os
 import create_summary_tables
+import export_slate_averages_vw
 
 
 # --- 1. Configuration ---
@@ -230,8 +231,11 @@ def main():
     # --- Run the summary and export pipeline automatically ---
     print("\nStarting automatic summary generation...")
     create_summary_tables.run_summary_pipeline()
-    print("\nAutomatic summary generation complete.")
-
+    
+    print("\nStarting slate view update...")
+    export_slate_averages_vw.run_slate_averages_pipeline()
+    
+    print("\nAll pipelines complete.")
 
 if __name__ == "__main__":
     main()

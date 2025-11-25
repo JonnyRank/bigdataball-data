@@ -1,4 +1,4 @@
-# export_slate_averages.py
+# export_slate_averages_csv.py
 # Objectives:
 # 1. Locate and read 'DKEntries.csv' from the user's Downloads folder
 # 2. Extract player names from the DraftKings file by robustly finding the correct header row
