@@ -18,10 +18,11 @@ SELECT
     lws.SEASON_KEY AS SEASON,
     dp.PLAYER_NAME AS PLAYER,
     mt.TEAM_ABBREVIATION AS TEAM,
-    lws.VENUE,
     COUNT(lws.GAME_ID) AS GP,
-    ROUND(sum(lws.DK_POINTS), 2) AS DKPPG,
-    round(sum(lws.MINUTES),1) AS MINS
+    round(sum(lws.DK_POINTS) / count(lws.GAME_ID), 1) as DKPPG,
+    ROUND(sum(lws.DK_POINTS), 2) AS DK_POINTS,
+    round(sum(lws.MINUTES),1) AS MINS,
+    round(sum(lws.DK_POINTS) / sum(lws.MINUTES), 2) AS FPPM
 FROM
     logs_with_season lws
 LEFT JOIN dim_players dp ON lws.PLAYER_ID = dp.PLAYER_ID
