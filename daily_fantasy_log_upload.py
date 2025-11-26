@@ -11,6 +11,7 @@ import glob
 import os
 import create_summary_tables
 import export_slate_averages_vw
+import daily_player_upload
 
 
 # --- 1. Configuration ---
@@ -61,8 +62,24 @@ def main():
     """
     Finds all new .xlsx files, processes them into the database ensuring no
     duplicate game logs are added, and moves them to an archive folder.
+    Then runs the summary and slate export pipelines.
     """
+    
+    # --- STEP 1: Run Player Log Uploads (Box Scores) ---
+    print("\n=== STARTING PIPELINE: PLAYER LOGS ===")
+    try:
+        daily_player_upload.main()
+    except Exception as e:
+        print(f"*** CRITICAL ERROR in Player Upload: {e} ***")
+        # Optional: input("Press Enter to continue or Ctrl+C to stop...")
+    print("=== PLAYER LOGS COMPLETE ===\n")
+
+
+    # --- STEP 2: Initialize DB for Fantasy Logs ---
     initialize_database()
+
+    # --- Pre-load existing logs ---
+    # ... (The rest of your existing code follows here) ...
 
     # --- Pre-load existing logs ---
     # Try to load the logs that are already in the database.
@@ -93,12 +110,15 @@ def main():
             print(f"A database error occurred: {e}")
             return
 
-    # Sort the files to process them in chronological order, which is good practice.
+# Sort the files to process them in chronological order, which is good practice.
     files_to_process = sorted(glob.glob(os.path.join(NEW_FILES_FOLDER, "*.xlsx")))
 
     if not files_to_process:
-        print("No new files found to process.")
-        return
+        print("No new files found to process. Skipping ingestion phase.")
+        # Removed 'return' so the script continues to the pipelines below
+    
+    # The loop below handles an empty list automatically (it just won't run),
+    # so you don't need to indent or change the rest of the code!
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
 
@@ -228,12 +248,17 @@ def main():
 
     print("\n--- All new files processed. ---")
 
+    print("\n--- Ingestion Phase Complete ---")
+
     # --- Run the summary and export pipeline automatically ---
     print("\nStarting automatic summary generation...")
     create_summary_tables.run_summary_pipeline()
+    print("Summary generation complete.")
     
+    # --- Run the slate averages pipeline ---
     print("\nStarting slate view update...")
     export_slate_averages_vw.run_slate_averages_pipeline()
+    print("Slate view update complete.")
     
     print("\nAll pipelines complete.")
 

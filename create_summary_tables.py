@@ -268,33 +268,43 @@ def create_convenience_views():
     reg_season_view_name = "vw_player_averages_regular_season"
     playoffs_view_name = "vw_player_averages_playoffs"
 
-    # SQL statements for Regular Season View
-    drop_reg_season_sql = f"DROP VIEW IF EXISTS {reg_season_view_name};"
+    # SQL statements
+    drop_reg_season_sql = f"DROP VIEW IF EXISTS {reg_season_view_name}"
     create_reg_season_sql = f"""
-    CREATE VIEW vw_player_averages_regular_season AS
+    CREATE VIEW {reg_season_view_name} AS
     SELECT *
     FROM {AVERAGES_TABLE_NAME}
-    WHERE SEASON_TYPE = 'Regular';
+    WHERE SEASON_TYPE = 'Regular'
     """
 
-    # SQL for Playoffs View
-    drop_playoffs_sql = f"DROP VIEW IF EXISTS {playoffs_view_name};"
+    drop_playoffs_sql = f"DROP VIEW IF EXISTS {playoffs_view_name}"
     create_playoffs_sql = f"""
-    CREATE VIEW vw_player_averages_playoffs AS
+    CREATE VIEW {playoffs_view_name} AS
     SELECT *
     FROM {AVERAGES_TABLE_NAME}
-    WHERE SEASON_TYPE = 'Playoffs';
+    WHERE SEASON_TYPE = 'Playoffs'
     """
 
-    # Execute each statement separately
+    # Execute transactions separately to ensure persistence
     with engine.connect() as connection:
-        connection.execute(text(drop_reg_season_sql))
-        connection.execute(text(create_reg_season_sql))
-        print(f"Successfully created/updated '{reg_season_view_name}'.")
-        connection.execute(text(drop_playoffs_sql))
-        connection.execute(text(create_playoffs_sql))
-        print(f"Successfully created/updated '{playoffs_view_name}'.")
-        connection.commit()
+        # 1. Regular Season View
+        try:
+            connection.execute(text(drop_reg_season_sql))
+            connection.execute(text(create_reg_season_sql))
+            connection.commit() # Force commit immediately
+            print(f"Successfully created/updated '{reg_season_view_name}'.")
+        except Exception as e:
+            print(f"Error creating {reg_season_view_name}: {e}")
+
+        # 2. Playoffs View
+        try:
+            connection.execute(text(drop_playoffs_sql))
+            connection.execute(text(create_playoffs_sql))
+            connection.commit() # Force commit immediately
+            print(f"Successfully created/updated '{playoffs_view_name}'.")
+        except Exception as e:
+            print(f"Error creating {playoffs_view_name}: {e}")
+
     print("--- View creation complete ---")
 
 
