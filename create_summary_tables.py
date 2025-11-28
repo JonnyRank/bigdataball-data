@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.types import Integer, Float # <--- Added this
 from datetime import datetime
 import os
 import numpy as np
@@ -240,13 +241,40 @@ def create_fantasy_averages_table():
             0
         )  # Use fillna(0) to replace any NaN from std dev on single games
 
-        # Convert columns that should be whole numbers to integer type
+        # Convert columns that should be whole numbers to integer type in the dataframe
         integer_columns = ["PLAYER_ID", "GP", "GS", "SALPG"]
         for col in integer_columns:
             final_df[col] = final_df[col].astype(int)
 
+        # --- FIX: Explicitly define SQL types to prevent "BIGINT" (Binary) errors in Excel ---
+        sql_types = {
+            "PLAYER_ID": Integer(),  # Forces standard INTEGER
+            "GP": Integer(),         # Forces standard INTEGER
+            "GS": Integer(),         # Forces standard INTEGER
+            "SALPG": Integer(),      # Forces standard INTEGER
+            "FPPG": Float(),
+            "STDV_FPPG": Float(),
+            "MPG": Float(),
+            "STDV_MPG": Float(),
+            "FPPM": Float(),
+            "STDV_FPPM": Float(),
+            "USG": Float(),
+            "GSFPPG": Float(),
+            "STDV_GSFPPG": Float(),
+            "GSMPG": Float(),
+            "STDV_GSMPG": Float(),
+            "GSFPPM": Float(),
+            "STDV_GSFPPM": Float()
+        }
+
         # Save the final DataFrame to a new SQL table
-        final_df.to_sql(AVERAGES_TABLE_NAME, engine, if_exists="replace", index=False)
+        final_df.to_sql(
+            AVERAGES_TABLE_NAME, 
+            engine, 
+            if_exists="replace", 
+            index=False,
+            dtype=sql_types # <--- The critical fix
+        )
         print(
             f"Successfully created/updated '{AVERAGES_TABLE_NAME}' table with {len(final_df)} rows."
         )
