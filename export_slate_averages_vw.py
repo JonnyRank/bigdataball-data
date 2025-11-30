@@ -72,38 +72,52 @@ def run_slate_averages_pipeline():
 
         final_names_to_query = list(set(final_names_to_query))
         print(f"Identified {len(final_names_to_query)} valid database players.")
-
+        
         # --- 5. Create the View ---
         # Escape single quotes for SQL safety
         formatted_names = [name.replace("'", "''") for name in final_names_to_query]
         sql_names_string = "', '".join(formatted_names)
         
-        # We drop the old view and recreate it with the CURRENT slate's players
         view_name = "vw_daily_slate"
         
-        drop_view_sql = f"DROP VIEW IF EXISTS {view_name};"
+        drop_view_sql = f"DROP VIEW IF EXISTS {view_name}"
         
+        # NOTE: We included the explicit CASTs from the previous step here too
         create_view_sql = f"""
         CREATE VIEW {view_name} AS
         SELECT 
-            SEASON, PLAYER, TEAM, GP, GS, MPG, GSMPG, FPPG, GSFPPG, FPPM, GSFPPM, STDV_FPPG as STDV
+            SEASON, 
+            PLAYER, 
+            TEAM, 
+            CAST(GP AS INTEGER) AS GP,
+            CAST(GS AS INTEGER) AS GS,
+            MPG, 
+            GSMPG, 
+            FPPG, 
+            GSFPPG, 
+            FPPM, 
+            GSFPPM, 
+            STDV_FPPG as STDV
         FROM 
             vw_player_averages_regular_season
         WHERE 
-            (SEASON = '2024-25' AND GP >=20)
-            OR SEASON = '2025-26'
+            SEASON in ('2024-25', '2025-26')
             AND PLAYER IN ('{sql_names_string}')
-        ORDER BY 
-            TEAM, PLAYER, SEASON DESC;
+        ORDER BY
+            TEAM, PLAYER, SEASON desc
         """
 
-        with engine.connect() as connection:
-            connection.execute(text(drop_view_sql))
-            connection.execute(text(create_view_sql))
-            connection.commit()
+        # USE engine.begin() - Automatically commits the view to disk
+        try:
+            with engine.begin() as connection:
+                connection.execute(text(drop_view_sql))
+                connection.execute(text(create_view_sql))
             
-        print(f"SUCCESS: View '{view_name}' has been updated with {len(final_names_to_query)} players.")
-        print("You can now query 'vw_daily_slate' directly from Excel.")
+            print(f"SUCCESS: View '{view_name}' has been updated with {len(final_names_to_query)} players.")
+            print("You can now query 'vw_daily_slate' directly from Excel.")
+            
+        except Exception as e:
+            print(f"*** Error updating view: {e} ***")
 
     except Exception as e:
         print(f"*** An error occurred: {e} ***")

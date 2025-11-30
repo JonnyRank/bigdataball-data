@@ -313,25 +313,20 @@ def create_convenience_views():
     WHERE SEASON_TYPE = 'Playoffs'
     """
 
-    # Execute transactions separately to ensure persistence
-    with engine.connect() as connection:
-        # 1. Regular Season View
-        try:
+    # USE engine.begin() - This automatically commits the transaction on success
+    # This ensures the views are 100% saved before the next function runs.
+    try:
+        with engine.begin() as connection:
             connection.execute(text(drop_reg_season_sql))
             connection.execute(text(create_reg_season_sql))
-            connection.commit() # Force commit immediately
             print(f"Successfully created/updated '{reg_season_view_name}'.")
-        except Exception as e:
-            print(f"Error creating {reg_season_view_name}: {e}")
-
-        # 2. Playoffs View
-        try:
+            
             connection.execute(text(drop_playoffs_sql))
             connection.execute(text(create_playoffs_sql))
-            connection.commit() # Force commit immediately
             print(f"Successfully created/updated '{playoffs_view_name}'.")
-        except Exception as e:
-            print(f"Error creating {playoffs_view_name}: {e}")
+            
+    except Exception as e:
+        print(f"*** Error creating views: {e} ***")
 
     print("--- View creation complete ---")
 
