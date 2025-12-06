@@ -25,5 +25,6 @@ round(fl.USAGE, 1) as USG
 from fantasy_logs fl
 LEFT JOIN player_logs pl ON fl.PLAYER_ID = pl.PLAYER_ID AND fl.GAME_ID = pl.GAME_ID
 LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-where fl.Player = 'Jett Howard' AND DKPTS >= 15
+where fl.Player = 'Oscar Tshiebwe' --and fl.DATE >= '2025-11-13'
+AND DKPTS >= 15
 ORDER by DKPTS DESC

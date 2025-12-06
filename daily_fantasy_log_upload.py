@@ -249,7 +249,7 @@ def main():
     print("\n--- All new files processed. ---")
 
     print("\n--- Ingestion Phase Complete ---")
-
+ 
     # --- Run the summary and export pipeline automatically ---
     print("\nStarting automatic summary generation...")
     create_summary_tables.run_summary_pipeline()
