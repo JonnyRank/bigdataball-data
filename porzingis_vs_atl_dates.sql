@@ -5,12 +5,19 @@
 -- 1. Averages for games on dates when 'Kristaps Porzingis' also played.
 -- 2. Averages for games on dates when 'Kristaps Porzingis' did NOT play.
 
-WITH KpGameDates AS (
-    -- First, get a distinct list of dates Kristaps Porzingis played on or after the target date.
+WITH KpPlayerId AS (
+    -- Robustly find the Player ID for Kristaps Porzingis from the dimension table.
+    -- This avoids issues with name variations in the raw logs.
+    SELECT PLAYER_ID
+    FROM dim_players
+    WHERE PLAYER_NAME = 'LeBron James'
+),
+KpGameDates AS (
+    -- Using the ID from the CTE above, get a distinct list of dates Kristaps Porzingis played.
     SELECT DISTINCT DATE
     FROM fantasy_logs
-    WHERE PLAYER = 'Kristaps Porzingis'
-      AND DATE >= '2025-10-31'
+    WHERE PLAYER_ID = (SELECT PLAYER_ID FROM KpPlayerId)
+      AND DATE >= '2025-10-21'
 ),
 PlayerStats AS (
     -- Second, calculate the aggregated stats for each player in both scenarios.
@@ -34,9 +41,9 @@ PlayerStats AS (
 
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-    WHERE fl.DATE >= '2025-10-31'
-      AND mt.TEAM_ABBREVIATION = 'ATL'
-      AND fl.PLAYER != 'Kristaps Porzingis' -- Exclude Kristaps Porzingis from the results
+    WHERE fl.DATE >= '2025-10-21'
+      AND mt.TEAM_ABBREVIATION = 'LAL'
+      AND fl.PLAYER_ID != (SELECT PLAYER_ID FROM KpPlayerId) -- Exclude Kristaps Porzingis by ID
     GROUP BY
         fl.PLAYER,
         mt.TEAM_ABBREVIATION

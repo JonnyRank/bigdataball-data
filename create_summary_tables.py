@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.types import Integer, Float # <--- Added this
+from sqlalchemy.types import Integer, Float  # <--- Added this
 from datetime import datetime
 import os
 import numpy as np
@@ -11,7 +11,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # HARDCODED PATHS FOR MIGRATION
 # Check if Google Drive (G:) exists
 if os.path.exists(r"G:\My Drive"):
-    # UPDATE THIS: Must match the folder name you used in the previous script
     BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
 else:
     # Fallback for non-synced machines (looks for a local 'Data' folder)
@@ -249,9 +248,9 @@ def create_fantasy_averages_table():
         # --- FIX: Explicitly define SQL types to prevent "BIGINT" (Binary) errors in Excel ---
         sql_types = {
             "PLAYER_ID": Integer(),  # Forces standard INTEGER
-            "GP": Integer(),         # Forces standard INTEGER
-            "GS": Integer(),         # Forces standard INTEGER
-            "SALPG": Integer(),      # Forces standard INTEGER
+            "GP": Integer(),  # Forces standard INTEGER
+            "GS": Integer(),  # Forces standard INTEGER
+            "SALPG": Integer(),  # Forces standard INTEGER
             "FPPG": Float(),
             "STDV_FPPG": Float(),
             "MPG": Float(),
@@ -264,16 +263,16 @@ def create_fantasy_averages_table():
             "GSMPG": Float(),
             "STDV_GSMPG": Float(),
             "GSFPPM": Float(),
-            "STDV_GSFPPM": Float()
+            "STDV_GSFPPM": Float(),
         }
 
         # Save the final DataFrame to a new SQL table
         final_df.to_sql(
-            AVERAGES_TABLE_NAME, 
-            engine, 
-            if_exists="replace", 
+            AVERAGES_TABLE_NAME,
+            engine,
+            if_exists="replace",
             index=False,
-            dtype=sql_types # <--- The critical fix
+            dtype=sql_types,  # <--- The critical fix
         )
         print(
             f"Successfully created/updated '{AVERAGES_TABLE_NAME}' table with {len(final_df)} rows."
@@ -289,60 +288,72 @@ def create_convenience_views():
     """
     Creates simple database views on top of the fantasy_averages table
     for easy access to regular season and playoff data.
+
+    Returns:
+        list: A list of view names that were successfully created or updated.
     """
     print("\n--- Creating convenience views ---")
+    successful_views = []
 
-    # Define the view names
-    reg_season_view_name = "vw_player_averages_regular_season"
-    playoffs_view_name = "vw_player_averages_playoffs"
+    # Define the views to be created in a structured way
+    views_to_create = {
+        "vw_player_averages_regular_season": f"""
+            CREATE VIEW {{view_name}} AS
+            SELECT * FROM {AVERAGES_TABLE_NAME}
+            WHERE SEASON_TYPE = 'Regular'
+        """,
+        "vw_player_averages_playoffs": f"""
+            CREATE VIEW {{view_name}} AS
+            SELECT * FROM {AVERAGES_TABLE_NAME}
+            WHERE SEASON_TYPE = 'Playoffs'
+        """,
+    }
 
-    # SQL statements
-    drop_reg_season_sql = f"DROP VIEW IF EXISTS {reg_season_view_name}"
-    create_reg_season_sql = f"""
-    CREATE VIEW {reg_season_view_name} AS
-    SELECT *
-    FROM {AVERAGES_TABLE_NAME}
-    WHERE SEASON_TYPE = 'Regular'
-    """
+    for view_name, create_sql_template in views_to_create.items():
+        drop_sql = f"DROP VIEW IF EXISTS {view_name}"
+        # The template uses {view_name} which we format here
+        create_sql = create_sql_template.format(view_name=view_name)
 
-    drop_playoffs_sql = f"DROP VIEW IF EXISTS {playoffs_view_name}"
-    create_playoffs_sql = f"""
-    CREATE VIEW {playoffs_view_name} AS
-    SELECT *
-    FROM {AVERAGES_TABLE_NAME}
-    WHERE SEASON_TYPE = 'Playoffs'
-    """
+        try:
+            # Use a dedicated transaction for each view. This isolates failures,
+            # preventing an issue with one view from affecting the other.
+            # The `with engine.begin()` block ensures the DROP and CREATE
+            # are committed together atomically.
+            with engine.begin() as connection:
+                connection.execute(text(drop_sql))
+                connection.execute(text(create_sql))
 
-    # USE engine.begin() - This automatically commits the transaction on success
-    # This ensures the views are 100% saved before the next function runs.
-    try:
-        with engine.begin() as connection:
-            connection.execute(text(drop_reg_season_sql))
-            connection.execute(text(create_reg_season_sql))
-            print(f"Successfully created/updated '{reg_season_view_name}'.")
-            
-            connection.execute(text(drop_playoffs_sql))
-            connection.execute(text(create_playoffs_sql))
-            print(f"Successfully created/updated '{playoffs_view_name}'.")
-            
-    except Exception as e:
-        print(f"*** Error creating views: {e} ***")
+            print(f"Successfully created/updated '{view_name}'.")
+            successful_views.append(view_name)
+        except Exception as e:
+            # If a single view fails, we log it and continue.
+            # This makes the pipeline more resilient.
+            print(f"*** Error creating view '{view_name}': {e} ***")
 
     print("--- View creation complete ---")
+    return successful_views
 
 
-def export_views_to_csv():
+def export_views_to_csv(views_to_export: list):
     """
     Reads data from the database views and exports them to CSV files.
+
+    Args:
+        views_to_export (list): A list of view names to export. This function
+                                will only attempt to export views in this list.
     """
     print("\n--- Exporting views to CSV ---")
+
+    if not views_to_export:
+        print("No views were successfully created, skipping CSV export.")
+        return
 
     # Ensure the export directory exists
     os.makedirs(CSV_EXPORT_DIR, exist_ok=True)
     print(f"CSV files will be saved in: {CSV_EXPORT_DIR}")
 
-    # Define view names and corresponding output file names
-    views_to_export = {
+    # Map view names to their desired output file names
+    view_file_map = {
         "vw_player_averages_regular_season": "player_averages_regular_season.csv",
         "vw_player_averages_playoffs": "player_averages_playoffs.csv",
     }
@@ -351,7 +362,11 @@ def export_views_to_csv():
     timestamp = datetime.now().strftime("%m-%d-%Y_%H%M%S")
 
     try:
-        for view_name, base_file_name in views_to_export.items():
+        # Iterate over the list of views that were successfully created
+        for view_name in views_to_export:
+            if view_name not in view_file_map:
+                continue  # Skip if we don't have a file mapping for this view
+            base_file_name = view_file_map[view_name]
             # Split the base filename into name and extension
             name_part, extension = os.path.splitext(base_file_name)
             # Create the new filename with the timestamp
@@ -375,8 +390,9 @@ def export_views_to_csv():
 def run_summary_pipeline():
     """Runs the full data summary and export pipeline."""
     if create_fantasy_averages_table():
-        create_convenience_views()
-        export_views_to_csv()
+        successful_views = create_convenience_views()
+        # Only attempt to export the views that were created without errors.
+        export_views_to_csv(successful_views)
 
 
 if __name__ == "__main__":

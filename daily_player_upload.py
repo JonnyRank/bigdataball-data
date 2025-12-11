@@ -17,7 +17,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # HARDCODED PATHS FOR MIGRATION
 # Check if Google Drive (G:) exists
 if os.path.exists(r"G:\My Drive"):
-    # UPDATE THIS: Ensure this matches exactly where you moved the "My Data Sources" content
     BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
 else:
     # Fallback for non-synced machines
