@@ -118,6 +118,37 @@ def run_slate_averages_smart_export():
         os.makedirs(CSV_EXPORT_DIR, exist_ok=True)
         results_df.to_csv(export_path, index=False)
         print(f"SUCCESS: Exported {len(results_df)} rows to: {export_path}")
+
+        # --- 6. Create and Export the L30 CSV ---
+        print("\n--- Creating L30 Slate Averages Export ---")
+        query_l30 = f"""
+        SELECT
+            SEASON,
+            PLAYER,
+            TEAM,
+            GP,
+            GS,
+            MPG,
+            GSMPG,
+            FPPG,
+            GSFPPG,
+            FPPM,
+            GSFPPM,
+            STDV_FPPG as STDV,
+            L30FPPM
+        FROM
+            vw_player_averages_regular_season
+        WHERE
+            SEASON = '2025-26'
+            AND PLAYER IN ('{sql_names_string}')
+        ORDER BY
+            TEAM, PLAYER
+        """
+        results_l30_df = pd.read_sql_query(query_l30, engine)
+        export_l30_filename = f"slate_player_averages_l30_{timestamp}.csv"
+        export_l30_path = os.path.join(CSV_EXPORT_DIR, export_l30_filename)
+        results_l30_df.to_csv(export_l30_path, index=False)
+        print(f"SUCCESS: Exported {len(results_l30_df)} rows to: {export_l30_path}")
         
     except Exception as e:
         print(f"*** An error occurred: {e} ***")

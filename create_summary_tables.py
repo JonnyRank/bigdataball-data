@@ -134,6 +134,16 @@ def create_fantasy_averages_table():
         # Drop any rows that don't match a season type
         df.dropna(subset=["SEASON_TYPE", "SEASON_KEY"], inplace=True)
 
+        # --- NEW: Add columns for L30FPPM calculation ---
+        # Ensure DATE column is datetime for comparison
+        df["DATE"] = pd.to_datetime(df["DATE"])
+        thirty_days_ago = pd.Timestamp.now().normalize() - pd.Timedelta(days=30)
+
+        # Create conditional columns for points and minutes in the last 30 days
+        # Use np.nan so these values are ignored in sums if they don't meet the condition
+        df["L30_DK_POINTS"] = np.where(df["DATE"] >= thirty_days_ago, df["DK_POINTS"], np.nan)
+        df["L30_MINUTES"] = np.where(df["DATE"] >= thirty_days_ago, df["MINUTES"], np.nan)
+
         # Calculate per-game metrics, handling division by zero
         df["GAME_FPPM"] = (
             (df["DK_POINTS"] / df["MINUTES"]).replace([np.inf, -np.inf], 0).fillna(0)
@@ -158,6 +168,8 @@ def create_fantasy_averages_table():
             "GS_DK_POINTS": ["mean", "std", "sum"],
             "GS_MINUTES": ["mean", "std", "sum"],
             "GS_GAME_FPPM": "std",  # Only need std dev of per-game FPPM for volatility
+            "L30_DK_POINTS": "sum", # Sum of points in last 30 days
+            "L30_MINUTES": "sum", # Sum of minutes in last 30 days
         }
 
         # Group by season, player, and team, then aggregate
@@ -190,6 +202,13 @@ def create_fantasy_averages_table():
         )
         grouped["GSFPPM"] = (
             (grouped["GS_DK_POINTS_sum"] / grouped["GS_MINUTES_sum"])
+            .replace([np.inf, -np.inf], 0)
+            .fillna(0)
+        )
+
+        # Calculate L30FPPM
+        grouped["L30FPPM"] = (
+            (grouped["L30_DK_POINTS_sum"] / grouped["L30_MINUTES_sum"])
             .replace([np.inf, -np.inf], 0)
             .fillna(0)
         )
@@ -235,6 +254,7 @@ def create_fantasy_averages_table():
             "STDV_GSMPG": 2,
             "GSFPPM": 2,
             "STDV_GSFPPM": 2,
+            "L30FPPM": 2,
         }
         final_df = final_df.round(rounding_map).fillna(
             0
@@ -264,6 +284,7 @@ def create_fantasy_averages_table():
             "STDV_GSMPG": Float(),
             "GSFPPM": Float(),
             "STDV_GSFPPM": Float(),
+            "L30FPPM": Float(),
         }
 
         # Save the final DataFrame to a new SQL table

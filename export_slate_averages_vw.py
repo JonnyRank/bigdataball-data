@@ -119,6 +119,43 @@ def run_slate_averages_pipeline():
         except Exception as e:
             print(f"*** Error updating view: {e} ***")
 
+        # --- 6. Create the L30 View ---
+        view_name_l30 = "vw_daily_slate_l30"
+        drop_view_l30_sql = f"DROP VIEW IF EXISTS {view_name_l30}"
+
+        # This new view includes L30FPPM and is filtered to only the 2025-26 season.
+        create_view_l30_sql = f"""
+        CREATE VIEW {view_name_l30} AS
+        SELECT
+            SEASON,
+            PLAYER,
+            TEAM,
+            CAST(GP AS INTEGER) AS GP,
+            CAST(GS AS INTEGER) AS GS,
+            MPG,
+            GSMPG,
+            FPPG,
+            GSFPPG,
+            FPPM,
+            GSFPPM,
+            STDV_FPPG as STDV,
+            L30FPPM
+        FROM
+            vw_player_averages_regular_season
+        WHERE
+            SEASON = '2025-26'
+            AND PLAYER IN ('{sql_names_string}')
+        ORDER BY
+            TEAM, PLAYER
+        """
+        try:
+            with engine.begin() as connection:
+                connection.execute(text(drop_view_l30_sql))
+                connection.execute(text(create_view_l30_sql))
+            print(f"SUCCESS: View '{view_name_l30}' has been updated with {len(final_names_to_query)} players.")
+        except Exception as e:
+            print(f"*** Error updating view '{view_name_l30}': {e} ***")
+
     except Exception as e:
         print(f"*** An error occurred: {e} ***")
 
