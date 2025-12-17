@@ -1,12 +1,9 @@
 -- SQLite
--- This query calculates player season averages for the '2025-2026' season,
--- ensuring one record per player, reflecting their most recent team.
--- It includes standard season-long metrics and a special 'L30FPPM' metric
--- for recent performance, plus starter-specific stats and volatility (STDV).
+-- This query calculates player averages strictly for the past 30 days.
+-- It filters the logs first, so all resulting metrics (GP, FPPG, FPPM)
+-- reflect the L30 window.
 
 WITH SeasonLogs AS (
-    -- First, select all game logs for the target season and rank them by date for each player
-    -- to identify their most recent team.
     SELECT
         fl.*,
         dp.PLAYER_NAME,
@@ -19,11 +16,10 @@ WITH SeasonLogs AS (
     LEFT JOIN
         map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
     WHERE
-        fl.SEASON_SEGMENT LIKE 'NBA 2025-2026%'
-        or fl.SEASON_SEGMENT LIKE 'NBA 2025 In-%'
+        (fl.SEASON_SEGMENT LIKE 'NBA 2025-2026%' OR fl.SEASON_SEGMENT LIKE 'NBA 2025 In-%')
+        AND fl.DATE >= date('now', '-30 days') -- RESTRICT TO LAST 30 DAYS
 ),
 LatestTeam AS (
-    -- Second, create a map of each player to their most recent team abbreviation.
     SELECT
         PLAYER_ID,
         TEAM_ABBREVIATION
@@ -32,9 +28,8 @@ LatestTeam AS (
     WHERE
         rn = 1
 )
--- Finally, aggregate the stats for each player across the entire season.
 SELECT
-    '2025-26' AS SEASON,
+    'L30 Days' AS SEASON,
     sl.PLAYER_NAME AS PLAYER,
     lt.TEAM_ABBREVIATION AS TEAM,
     COUNT(sl.GAME_ID) AS GP,
@@ -44,9 +39,7 @@ SELECT
     ROUND(AVG(sl.DK_POINTS), 2) AS FPPG,
     ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END), 2) AS GSFPPG,
     ROUND(IFNULL(SUM(sl.DK_POINTS) / NULLIF(SUM(sl.MINUTES), 0), 0), 2) AS FPPM,
-    ROUND(IFNULL(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 0), 0), 2) AS GSFPPM,
-    -- Last 30 Days Fantasy Points Per Minute (L30FPPM)
-    ROUND(IFNULL(SUM(CASE WHEN sl.DATE >= date('now', '-30 days') THEN sl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN sl.DATE >= date('now', '-30 days') THEN sl.MINUTES END), 0), 0), 2) AS L30FPPM
+    ROUND(IFNULL(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 0), 0), 2) AS GSFPPM
 FROM
     SeasonLogs sl
 JOIN
