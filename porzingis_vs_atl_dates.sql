@@ -10,7 +10,7 @@ WITH KpPlayerId AS (
     -- This avoids issues with name variations in the raw logs.
     SELECT PLAYER_ID
     FROM dim_players
-    WHERE PLAYER_NAME = 'LeBron James'
+    WHERE PLAYER_NAME = 'Evan Mobley'
 ),
 KpGameDates AS (
     -- Using the ID from the CTE above, get a distinct list of dates Kristaps Porzingis played.
@@ -42,7 +42,7 @@ PlayerStats AS (
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
     WHERE fl.DATE >= '2025-10-21'
-      AND mt.TEAM_ABBREVIATION = 'LAL'
+      AND mt.TEAM_ABBREVIATION = 'CLE'
       AND fl.PLAYER_ID != (SELECT PLAYER_ID FROM KpPlayerId) -- Exclude Kristaps Porzingis by ID
     GROUP BY
         fl.PLAYER,
