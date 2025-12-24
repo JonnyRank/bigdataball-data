@@ -1,5 +1,9 @@
 # .gitignore
 
+# Security: Exclude credentials and tokens
+client_secrets.json
+token.json
+
 # Virtual Environment: Never commit this folder
 venv/
 
