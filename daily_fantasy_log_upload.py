@@ -12,6 +12,7 @@ import os
 import create_summary_tables
 import export_slate_averages_vw
 import daily_player_upload
+import drive_ingestion
 
 
 # --- 1. Configuration ---
@@ -63,6 +64,14 @@ def main():
     duplicate game logs are added, and moves them to an archive folder.
     Then runs the summary and slate export pipelines.
     """
+
+    # --- STEP 0: Run Google Drive Ingestion ---
+    print("\n=== STARTING PIPELINE: GOOGLE DRIVE INGESTION ===")
+    try:
+        drive_ingestion.main()
+    except Exception as e:
+        print(f"*** CRITICAL ERROR in Drive Ingestion: {e} ***")
+    print("=== GOOGLE DRIVE INGESTION COMPLETE ===\n")
 
     # --- STEP 1: Run Player Log Uploads (Box Scores) ---
     print("\n=== STARTING PIPELINE: PLAYER LOGS ===")
