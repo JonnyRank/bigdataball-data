@@ -44,7 +44,7 @@ FROM
     SeasonLogs sl
 JOIN
     LatestTeam lt ON sl.PLAYER_ID = lt.PLAYER_ID
-    where sl.Player_Name = 'Victor Wembanyama'
+    where sl.Player_Name = 'Myles Turner'
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,
