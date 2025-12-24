@@ -17,3 +17,6 @@ __pycache__/
 
 # Code Design Files
 BigDataBall-Ingestion-Pipeline-Setup-Guide.md
+
+# Additional files to ignore
+Python-Bigdataball-Project.code-workspace
