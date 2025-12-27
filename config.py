@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Base directory for downloads
 BASE_DOWNLOAD_DIR = r"G:\My Drive\Documents\bigdataball"
@@ -7,14 +10,14 @@ BASE_DOWNLOAD_DIR = r"G:\My Drive\Documents\bigdataball"
 DATASET_JOBS = [
     {
         "name": "DFS Feed",
-        "drive_folder_id": "1AKiQPCB9rmbroGgpSqNUW2ui6e9_2mEW",
+        "drive_folder_id": os.getenv("DRIVE_FOLDER_ID_DFS"),
         "file_match": "-dfs-feed.xlsx",  # Substring to match in filename
         "local_dest": os.path.join(BASE_DOWNLOAD_DIR, "Daily_Fantasy_Logs"),
     },
     {
         # Example: Player Box Scores
         "name": "Player Feed",
-        "drive_folder_id": "1K0ClOAbKTSzCxfJIQZ8rkA_Zu7maENHX",
+        "drive_folder_id": os.getenv("DRIVE_FOLDER_ID_PLAYER"),
         "file_match": "season-player-feed.xlsx",
         "local_dest": os.path.join(BASE_DOWNLOAD_DIR, "Daily_Player_Logs"),
     },
@@ -27,6 +30,6 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 # Email Notification Settings
 EMAIL_ENABLED = True  # Set to False to disable temporarily
-EMAIL_SENDER = "jonathandrankin@gmail.com"
-EMAIL_PASSWORD = "hxpl cfhb nhna okpx"  # Generate at https://myaccount.google.com/apppasswords
-EMAIL_RECEIVER = "jonathandrankin@gmail.com"
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")

@@ -2,22 +2,22 @@
 -- This query calculates and compares player stats for the Atlanta Hawks ('ATL')
 -- on or after '2025-10-31'. It provides two sets of metrics for each player,
 -- and calculates the difference in performance between the two scenarios.
--- 1. Averages for games on dates when 'Kristaps Porzingis' also played.
--- 2. Averages for games on dates when 'Kristaps Porzingis' did NOT play.
+-- 1. Averages for games on dates when Bam Adebayo OR Tyler Herro played.
+-- 2. Averages for games on dates when BOTH Bam Adebayo AND Tyler Herro were OUT.
 
-WITH KpPlayerId AS (
-    -- Robustly find the Player ID for Kristaps Porzingis from the dimension table.
+WITH TargetPlayerIds AS (
+    -- Robustly find the Player IDs for Bam and Tyler from the dimension table.
     -- This avoids issues with name variations in the raw logs.
     SELECT PLAYER_ID
     FROM dim_players
-    WHERE PLAYER_NAME = 'Trae Young'
+    WHERE PLAYER_NAME IN ('Bam Adebayo', 'Tyler Herro')
 ),
-KpGameDates AS (
-    -- Using the ID from the CTE above, get a distinct list of dates Kristaps Porzingis played.
+TargetGameDates AS (
+    -- Get a distinct list of dates where AT LEAST ONE of the target players played.
     SELECT DISTINCT DATE
     FROM fantasy_logs
-    WHERE PLAYER_ID = (SELECT PLAYER_ID FROM KpPlayerId)
-      AND DATE >= '2025-12-18'
+    WHERE PLAYER_ID IN (SELECT PLAYER_ID FROM TargetPlayerIds)
+      AND DATE >= '2025-10-21'
 ),
 PlayerStats AS (
     -- Second, calculate the aggregated stats for each player in both scenarios.
@@ -26,44 +26,42 @@ PlayerStats AS (
         mt.TEAM_ABBREVIATION as TEAM,
 
         -- Games Played in each scenario
-        COUNT(CASE WHEN fl.DATE IN KpGameDates THEN fl.GAME_ID END) as GP_w_KP,
-        COUNT(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.GAME_ID END) as GP_no_KP,
+        COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END) as GP_With_Any,
+        COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END) as GP_Both_Out,
 
-        -- Averages for games ON dates Kristaps Porzingis played
-        ROUND(SUM(CASE WHEN fl.DATE IN KpGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN KpGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_w_KP,
-        ROUND(SUM(CASE WHEN fl.DATE IN KpGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN KpGameDates THEN fl.GAME_ID END), 0), 1) as MPG_w_KP,
-        ROUND(SUM(CASE WHEN fl.DATE IN KpGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE IN KpGameDates THEN fl.MINUTES END), 0), 2) as FPPM_w_KP,
+        -- Averages for games ON dates where at least one played
+        ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_With_Any,
+        ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END), 0), 1) as MPG_With_Any,
+        ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_With_Any,
 
-        -- Averages for games ON dates Kristaps Porzingis did NOT play
-        ROUND(SUM(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_no_KP,
-        ROUND(SUM(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.GAME_ID END), 0), 1) as MPG_no_KP,
-        ROUND(SUM(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE NOT IN KpGameDates THEN fl.MINUTES END), 0), 2) as FPPM_no_KP
+        -- Averages for games ON dates where BOTH were OUT
+        ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_Both_Out,
+        ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END), 0), 1) as MPG_Both_Out,
+        ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_Both_Out
 
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-    WHERE fl.DATE >= '2025-12-18'
-      AND mt.TEAM_ABBREVIATION = 'ATL'
-      AND fl.PLAYER_ID != (SELECT PLAYER_ID FROM KpPlayerId) -- Exclude Kristaps Porzingis by ID
+    WHERE fl.DATE >= '2025-10-21'
+      AND mt.TEAM_ABBREVIATION = 'MIA'
+      AND fl.PLAYER_ID NOT IN (SELECT PLAYER_ID FROM TargetPlayerIds) -- Exclude the stars themselves
     GROUP BY
         fl.PLAYER,
         mt.TEAM_ABBREVIATION
     HAVING
-        -- Only include players who average at least 5 DKPPG in BOTH scenarios
-        DKPPG_w_KP >= 5 AND DKPPG_no_KP >= 5
+        -- Only include players who played at least once when both were out
+        GP_Both_Out > 0
 )
 SELECT
     PLAYER,
     TEAM,
-    GP_w_KP,
-    DKPPG_w_KP,
-    GP_no_KP,
-    DKPPG_no_KP,
-    FPPM_w_KP,
-    FPPM_no_KP,
-    -- Calculate the difference in DKPPG. A positive number means the player scores more WITH Porzingis.
-    --ROUND(DKPPG_w_KP - DKPPG_no_KP, 2) AS DKPPG_DIFF,
-    -- Calculate the difference in FPPM. A positive number means the player is more efficient WITH Porzingis.
-    ROUND(FPPM_w_KP - FPPM_no_KP, 2) AS FPPM_DIFF
+    GP_With_Any,
+    DKPPG_With_Any,
+    GP_Both_Out,
+    DKPPG_Both_Out,
+    FPPM_With_Any,
+    FPPM_Both_Out,
+    -- Calculate the difference in FPPM. Positive number means they are better when stars are OUT.
+    ROUND(FPPM_Both_Out - FPPM_With_Any, 2) AS FPPM_DIFF
 FROM PlayerStats
 ORDER BY
-    DKPPG_no_KP DESC;
+    DKPPG_Both_Out DESC;

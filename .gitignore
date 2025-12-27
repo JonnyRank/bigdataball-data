@@ -3,6 +3,7 @@
 # Security: Exclude credentials and tokens
 client_secrets.json
 token.json
+.env
 
 # Virtual Environment: Never commit this folder
 venv/
