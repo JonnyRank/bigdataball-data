@@ -24,3 +24,9 @@ DATASET_JOBS = [
 CREDENTIALS_FILE = "client_secrets.json"
 TOKEN_FILE = "token.json"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+# Email Notification Settings
+EMAIL_ENABLED = True  # Set to False to disable temporarily
+EMAIL_SENDER = "jonathandrankin@gmail.com"
+EMAIL_PASSWORD = "hxpl cfhb nhna okpx"  # Generate at https://myaccount.google.com/apppasswords
+EMAIL_RECEIVER = "jonathandrankin@gmail.com"

@@ -13,6 +13,7 @@ import create_summary_tables
 import export_slate_averages_vw
 import daily_player_upload
 import drive_ingestion
+import email_notifier
 
 
 # --- 1. Configuration ---
@@ -65,21 +66,32 @@ def main():
     Then runs the summary and slate export pipelines.
     """
 
+    pipeline_errors = []
+
     # --- STEP 0: Run Google Drive Ingestion ---
     print("\n=== STARTING PIPELINE: GOOGLE DRIVE INGESTION ===")
     try:
         drive_ingestion.main()
     except Exception as e:
-        print(f"*** CRITICAL ERROR in Drive Ingestion: {e} ***")
+        error_msg = f"CRITICAL ERROR in Drive Ingestion: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
     print("=== GOOGLE DRIVE INGESTION COMPLETE ===\n")
 
     # --- STEP 1: Run Player Log Uploads (Box Scores) ---
     print("\n=== STARTING PIPELINE: PLAYER LOGS ===")
+    player_logs_count = 0
+    player_logs_overwritten = 0
     try:
-        daily_player_upload.main()
+        result = daily_player_upload.main()
+        if isinstance(result, tuple):
+            player_logs_count, player_logs_overwritten = result
+        else:
+            player_logs_count = result or 0
     except Exception as e:
-        print(f"*** CRITICAL ERROR in Player Upload: {e} ***")
-        # Optional: input("Press Enter to continue or Ctrl+C to stop...")
+        error_msg = f"CRITICAL ERROR in Player Upload: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
     print("=== PLAYER LOGS COMPLETE ===\n")
 
     # --- STEP 2: Initialize DB for Fantasy Logs ---
@@ -129,6 +141,8 @@ def main():
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
 
+    fantasy_logs_count = 0
+    fantasy_logs_overwritten = 0
     for file_path in files_to_process:
         file_name = os.path.basename(file_path)
         print(f"--- Processing: {file_name} ---")
@@ -245,12 +259,22 @@ def main():
 
             # --- 4e. Move File on Success ---
             destination_path = os.path.join(PROCESSED_FOLDER, file_name)
-            os.rename(file_path, destination_path)
+            
+            # Check if we are overwriting an existing file
+            is_overwrite = os.path.exists(destination_path)
+            
+            # Use replace to overwrite if the file already exists in the archive
+            os.replace(file_path, destination_path)
             print(f"Successfully processed and moved {file_name}.")
+            fantasy_logs_count += 1
+            if is_overwrite:
+                fantasy_logs_overwritten += 1
 
         except Exception as e:
-            print(f"\n*** ERROR processing {file_name}: {e} ***")
+            error_msg = f"ERROR processing {file_name}: {e}"
+            print(f"\n*** {error_msg} ***")
             print("Script will stop. The failed file was NOT moved.")
+            pipeline_errors.append(error_msg)
             break
 
     print("\n--- All new files processed. ---")
@@ -259,15 +283,39 @@ def main():
 
     # --- Run the summary and export pipeline automatically ---
     print("\nStarting automatic summary generation...")
-    create_summary_tables.run_summary_pipeline()
-    print("Summary generation complete.")
+    try:
+        create_summary_tables.run_summary_pipeline()
+        print("Summary generation complete.")
+    except Exception as e:
+        error_msg = f"ERROR in Summary Generation: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
 
     # --- Run the slate averages pipeline ---
     print("\nStarting slate view update...")
-    export_slate_averages_vw.run_slate_averages_pipeline()
-    print("Slate view update complete.")
+    try:
+        export_slate_averages_vw.run_slate_averages_pipeline()
+        print("Slate view update complete.")
+    except Exception as e:
+        error_msg = f"ERROR in Slate View Update: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
 
     print("\nAll pipelines complete.")
+
+    # --- Send Notification ---
+    if pipeline_errors:
+        subject = "BigDataBall Pipeline: COMPLETED WITH ERRORS"
+        body = "The pipeline ran but encountered the following errors:\n\n" + "\n".join(pipeline_errors)
+        email_notifier.send_email_alert(subject, body)
+    else:
+        subject = "BigDataBall Pipeline: SUCCESS"
+        body = (
+            "The daily ingestion pipeline completed successfully with no errors.\n\n"
+            f"Player Logs Processed: {player_logs_count} (Overwritten: {player_logs_overwritten})\n"
+            f"Fantasy Logs Processed: {fantasy_logs_count} (Overwritten: {fantasy_logs_overwritten})"
+        )
+        email_notifier.send_email_alert(subject, body)
 
 
 if __name__ == "__main__":

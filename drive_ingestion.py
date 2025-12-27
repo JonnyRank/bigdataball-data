@@ -76,26 +76,23 @@ def download_file(service, file_id, file_name, local_dest):
 def main():
     print("--- Starting NBA Data Ingestion ---")
 
-    try:
-        service = get_drive_service()
+    # We removed the try/except block here so errors bubble up to the main pipeline
+    service = get_drive_service()
 
-        for job in config.DATASET_JOBS:
-            print(f"\nProcessing Job: {job['name']}")
+    for job in config.DATASET_JOBS:
+        print(f"\nProcessing Job: {job['name']}")
 
-            latest_file = find_latest_file(
-                service, job["drive_folder_id"], job["file_match"]
+        latest_file = find_latest_file(
+            service, job["drive_folder_id"], job["file_match"]
+        )
+
+        if latest_file:
+            print(f"  Found latest file: {latest_file['name']}")
+            download_file(
+                service, latest_file["id"], latest_file["name"], job["local_dest"]
             )
-
-            if latest_file:
-                print(f"  Found latest file: {latest_file['name']}")
-                download_file(
-                    service, latest_file["id"], latest_file["name"], job["local_dest"]
-                )
-            else:
-                print(f"  No files found matching '{job['file_match']}' in folder.")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+        else:
+            print(f"  No files found matching '{job['file_match']}' in folder.")
 
 
 if __name__ == "__main__":

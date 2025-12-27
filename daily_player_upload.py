@@ -88,17 +88,19 @@ def main():
         else:
             # For any other database error, stop the script.
             print(f"A database error occurred: {e}")
-            return
+            raise e
 
     # Sort the files to process them in chronological order, which is good practice.
     files_to_process = sorted(glob.glob(os.path.join(NEW_FILES_FOLDER, "*.xlsx")))
 
     if not files_to_process:
         print("No new files found to process.")
-        return
+        return 0, 0
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
 
+    processed_count = 0
+    overwritten_count = 0
     for file_path in files_to_process:
         file_name = os.path.basename(file_path)
         print(f"--- Processing: {file_name} ---")
@@ -227,8 +229,16 @@ def main():
 
             # --- 4e. Move File on Success ---
             destination_path = os.path.join(PROCESSED_FOLDER, file_name)
-            os.rename(file_path, destination_path)
+            
+            # Check if we are overwriting an existing file
+            is_overwrite = os.path.exists(destination_path)
+            
+            # Use replace to overwrite if the file already exists in the archive
+            os.replace(file_path, destination_path)
             print(f"Successfully processed and moved {file_name}.")
+            processed_count += 1
+            if is_overwrite:
+                overwritten_count += 1
 
         except Exception as e:
             print(f"\n*** ERROR processing {file_name}: {e} ***")
@@ -237,6 +247,7 @@ def main():
 
     print("\n--- All new files processed. ---")
 
+    return processed_count, overwritten_count
     # --- Run the summary and export pipeline automatically ---
     # print("\nStarting automatic summary generation...")
     # create_summary_tables.run_summary_pipeline()
