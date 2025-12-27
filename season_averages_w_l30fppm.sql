@@ -45,13 +45,15 @@ SELECT
     ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END), 2) AS GSFPPG,
     ROUND(IFNULL(SUM(sl.DK_POINTS) / NULLIF(SUM(sl.MINUTES), 0), 0), 2) AS FPPM,
     ROUND(IFNULL(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 0), 0), 2) AS GSFPPM,
+    -- Last 30 Days Games Played (L30GP)
+    COUNT(CASE WHEN sl.DATE >= date('now', '-30 days') THEN sl.GAME_ID END) AS L30GP,
     -- Last 30 Days Fantasy Points Per Minute (L30FPPM)
     ROUND(IFNULL(SUM(CASE WHEN sl.DATE >= date('now', '-30 days') THEN sl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN sl.DATE >= date('now', '-30 days') THEN sl.MINUTES END), 0), 0), 2) AS L30FPPM
 FROM
     SeasonLogs sl
 JOIN
     LatestTeam lt ON sl.PLAYER_ID = lt.PLAYER_ID
-    where sl.Player_Name = 'Victor Wembanyama'
+    where sl.Player_Name = 'Jordan Walsh'
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,

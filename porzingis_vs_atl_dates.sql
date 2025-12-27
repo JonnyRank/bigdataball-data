@@ -10,14 +10,14 @@ WITH KpPlayerId AS (
     -- This avoids issues with name variations in the raw logs.
     SELECT PLAYER_ID
     FROM dim_players
-    WHERE PLAYER_NAME = 'Evan Mobley'
+    WHERE PLAYER_NAME = 'Trae Young'
 ),
 KpGameDates AS (
     -- Using the ID from the CTE above, get a distinct list of dates Kristaps Porzingis played.
     SELECT DISTINCT DATE
     FROM fantasy_logs
     WHERE PLAYER_ID = (SELECT PLAYER_ID FROM KpPlayerId)
-      AND DATE >= '2025-10-21'
+      AND DATE >= '2025-12-18'
 ),
 PlayerStats AS (
     -- Second, calculate the aggregated stats for each player in both scenarios.
@@ -41,8 +41,8 @@ PlayerStats AS (
 
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-    WHERE fl.DATE >= '2025-10-21'
-      AND mt.TEAM_ABBREVIATION = 'CLE'
+    WHERE fl.DATE >= '2025-12-18'
+      AND mt.TEAM_ABBREVIATION = 'ATL'
       AND fl.PLAYER_ID != (SELECT PLAYER_ID FROM KpPlayerId) -- Exclude Kristaps Porzingis by ID
     GROUP BY
         fl.PLAYER,
@@ -57,7 +57,7 @@ SELECT
     GP_w_KP,
     DKPPG_w_KP,
     GP_no_KP,
-    --DKPPG_no_KP,
+    DKPPG_no_KP,
     FPPM_w_KP,
     FPPM_no_KP,
     -- Calculate the difference in DKPPG. A positive number means the player scores more WITH Porzingis.
