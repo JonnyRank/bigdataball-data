@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import glob
 import os
+import mappings
 
 # --- 1. Configuration ---
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -166,6 +167,18 @@ def main():
             # Apply the renaming using the map
             cleaned_data.rename(columns=rename_map, inplace=True)
 
+            # --- NEW: Standardize Player Names ---
+            if "PLAYER" in cleaned_data.columns:
+                # Identify names that are about to be changed for visibility
+                changed_mask = cleaned_data["PLAYER"].isin(mappings.PLAYER_NAME_MAP)
+                if changed_mask.any():
+                    print(
+                        f"  > Standardizing names: {cleaned_data.loc[changed_mask, 'PLAYER'].unique().tolist()}"
+                    )
+                cleaned_data["PLAYER"] = cleaned_data["PLAYER"].replace(
+                    mappings.PLAYER_NAME_MAP
+                )
+
             # --- End of new transformation section ---
 
             # --- 4b. De-duplicate Logs ---
@@ -229,10 +242,10 @@ def main():
 
             # --- 4e. Move File on Success ---
             destination_path = os.path.join(PROCESSED_FOLDER, file_name)
-            
+
             # Check if we are overwriting an existing file
             is_overwrite = os.path.exists(destination_path)
-            
+
             # Use replace to overwrite if the file already exists in the archive
             os.replace(file_path, destination_path)
             print(f"Successfully processed and moved {file_name}.")

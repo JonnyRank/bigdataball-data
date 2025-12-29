@@ -53,7 +53,7 @@ FROM
     SeasonLogs sl
 JOIN
     LatestTeam lt ON sl.PLAYER_ID = lt.PLAYER_ID
-    where sl.Player_Name = 'Jordan Walsh'
+    where sl.Player_Name = 'GG Jackson'
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,

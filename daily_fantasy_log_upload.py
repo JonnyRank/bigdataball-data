@@ -14,6 +14,8 @@ import export_slate_averages_vw
 import daily_player_upload
 import drive_ingestion
 import email_notifier
+import mappings
+from datetime import datetime
 
 
 # --- 1. Configuration ---
@@ -196,6 +198,18 @@ def main():
             # Drop the unwanted columns, using errors='ignore' in case a column doesn't exist
             cleaned_data.drop(columns=columns_to_drop, inplace=True, errors="ignore")
 
+            # --- NEW: Standardize Player Names using Shared Mapping ---
+            if "PLAYER" in cleaned_data.columns:
+                # Identify names that are about to be changed for visibility
+                changed_mask = cleaned_data["PLAYER"].isin(mappings.PLAYER_NAME_MAP)
+                if changed_mask.any():
+                    print(
+                        f"  > Standardizing names: {cleaned_data.loc[changed_mask, 'PLAYER'].unique().tolist()}"
+                    )
+                cleaned_data["PLAYER"] = cleaned_data["PLAYER"].replace(
+                    mappings.PLAYER_NAME_MAP
+                )
+
             # --- End of new transformation section ---
 
             # --- 4b. De-duplicate Logs ---
@@ -259,10 +273,10 @@ def main():
 
             # --- 4e. Move File on Success ---
             destination_path = os.path.join(PROCESSED_FOLDER, file_name)
-            
+
             # Check if we are overwriting an existing file
             is_overwrite = os.path.exists(destination_path)
-            
+
             # Use replace to overwrite if the file already exists in the archive
             os.replace(file_path, destination_path)
             print(f"Successfully processed and moved {file_name}.")
@@ -293,8 +307,11 @@ def main():
 
     # --- Run the slate averages pipeline ---
     print("\nStarting slate view update...")
+    unmatched_dk_players = []
     try:
-        export_slate_averages_vw.run_slate_averages_pipeline()
+        unmatched_dk_players = (
+            export_slate_averages_vw.run_slate_averages_pipeline() or []
+        )
         print("Slate view update complete.")
     except Exception as e:
         error_msg = f"ERROR in Slate View Update: {e}"
@@ -303,18 +320,50 @@ def main():
 
     print("\nAll pipelines complete.")
 
+    # Get current date for subject line
+    date_str = datetime.now().strftime("%Y-%m-%d")
+
     # --- Send Notification ---
     if pipeline_errors:
-        subject = "BigDataBall Pipeline: COMPLETED WITH ERRORS"
-        body = "The pipeline ran but encountered the following errors:\n\n" + "\n".join(pipeline_errors)
+        subject = f"BigDataBall Pipeline: COMPLETED WITH ERRORS [{date_str}]"
+        body = "The pipeline ran but encountered the following errors:\n\n" + "\n".join(
+            pipeline_errors
+        )
         email_notifier.send_email_alert(subject, body)
     else:
-        subject = "BigDataBall Pipeline: SUCCESS"
+        subject = f"BigDataBall Pipeline: SUCCESS [{date_str}]"
         body = (
             "The daily ingestion pipeline completed successfully with no errors.\n\n"
             f"Player Logs Processed: {player_logs_count} (Overwritten: {player_logs_overwritten})\n"
             f"Fantasy Logs Processed: {fantasy_logs_count} (Overwritten: {fantasy_logs_overwritten})"
         )
+
+        if unmatched_dk_players:
+            subject += " (With Warnings)"
+
+            # --- NEW: Write to todo_mappings.txt ---
+            todo_path = os.path.join(BASE_DATA_PATH, "todo_mappings.txt")
+            try:
+                # Check if file exists and has content to determine if we need a leading newline separator
+                needs_newline = (
+                    os.path.exists(todo_path) and os.path.getsize(todo_path) > 0
+                )
+                with open(todo_path, "a") as f:
+                    if needs_newline:
+                        f.write("\n")
+                    f.write(f"--- Unmatched Players: {date_str} ---\n")
+                    for name in unmatched_dk_players:
+                        f.write(f"{name}\n")
+                print(f"  > Unmatched players appended to {todo_path}")
+            except Exception as e:
+                print(f"  > Error writing to todo_mappings.txt: {e}")
+
+            body += "\n\n--- WARNING: Unmatched DraftKings Players ---\n"
+            body += f"The following {len(unmatched_dk_players)} players in DKEntries.csv could not be matched to the database:\n"
+            for name in unmatched_dk_players:
+                body += f" - {name}\n"
+            body += "\nPlease update mappings.py or check the source file."
+
         email_notifier.send_email_alert(subject, body)
 
 

@@ -31,7 +31,7 @@ def run_slate_averages_pipeline():
     # --- 2. Load DK Entries ---
     if not os.path.exists(DK_FILE_PATH):
         print(f"ERROR: Could not find file at {DK_FILE_PATH}")
-        return
+        return []
 
     # Robust header detection
     print(f"Reading file: {DK_FILE_PATH}")
@@ -44,12 +44,13 @@ def run_slate_averages_pipeline():
             header_row_index = i
             break
 
+    unmatched_names = []
     try:
         dk_df = pd.read_csv(DK_FILE_PATH, header=header_row_index)
 
         if "Name" not in dk_df.columns:
             print("ERROR: Could not find 'Name' column.")
-            return
+            return []
 
         dk_df = dk_df.dropna(subset=["Name"])
         dk_names = dk_df["Name"].unique().tolist()
@@ -73,6 +74,20 @@ def run_slate_averages_pipeline():
             match, score = process.extractOne(dk_name, valid_db_names)
             if score >= 90:
                 final_names_to_query.append(match)
+            else:
+                unmatched_names.append(
+                    f"{dk_name} (Best match: {match}, Score: {score})"
+                )
+
+        if unmatched_names:
+            print(
+                f"\n--- WARNING: {len(unmatched_names)} players in DKEntries could not be matched to database ---"
+            )
+            for name in unmatched_names:
+                print(f"   x {name}")
+            print(
+                "----------------------------------------------------------------------------------------------\n"
+            )
 
         final_names_to_query = list(set(final_names_to_query))
         print(f"Identified {len(final_names_to_query)} valid database players.")
@@ -166,6 +181,8 @@ def run_slate_averages_pipeline():
 
     except Exception as e:
         print(f"*** An error occurred: {e} ***")
+
+    return unmatched_names
 
 
 if __name__ == "__main__":
