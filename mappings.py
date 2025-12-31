@@ -4,4 +4,5 @@
 PLAYER_NAME_MAP = {
     "GG Jackson": "Gregory Jackson",
     "GG Jackson II": "Gregory Jackson",
+    "A.J. Green": "AJ Green",
 }

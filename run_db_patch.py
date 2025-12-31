@@ -23,22 +23,22 @@ def fix_player_names():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    print("Checking for 'GG Jackson' in dim_players...")
+    print("Checking for 'A.J. Green' in dim_players...")
 
     # Check how many records match before updating
-    cursor.execute("SELECT COUNT(*) FROM dim_players WHERE PLAYER_NAME = 'GG Jackson'")
+    cursor.execute("SELECT COUNT(*) FROM dim_players WHERE PLAYER_NAME = 'A.J. Green'")
     count = cursor.fetchone()[0]
 
     if count > 0:
-        print(f"Found {count} record(s). Updating to 'Gregory Jackson'...")
+        print(f"Found {count} record(s). Updating to 'AJ Green'...")
         # Execute the update
         cursor.execute(
-            "UPDATE dim_players SET PLAYER_NAME = 'Gregory Jackson' WHERE PLAYER_NAME = 'GG Jackson'"
+            "UPDATE dim_players SET PLAYER_NAME = 'AJ Green' WHERE PLAYER_NAME = 'A.J. Green'"
         )
         conn.commit()
         print("Update complete.")
     else:
-        print("No records found for 'GG Jackson'. He might already be updated.")
+        print("No records found for 'A.J. Green'. He might already be updated.")
 
     conn.close()
 
