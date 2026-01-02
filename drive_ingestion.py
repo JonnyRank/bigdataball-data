@@ -26,7 +26,7 @@ def find_latest_file(service, folder_id, file_match):
         service.files()
         .list(
             q=query,
-            orderBy="name",  # Sorts A-Z. The last item is usually the latest if named by date.
+            orderBy="createdTime",  # Sort by creation time to handle date rollovers (e.g. 12-31 vs 01-01)
             fields="files(id, name, createdTime)",
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
@@ -39,9 +39,9 @@ def find_latest_file(service, folder_id, file_match):
     if not items:
         return None
 
-    # Python sort to ensure we get the last one alphabetically (Latest)
-    # This matches the legacy logic: sorted(items)[-1]
-    latest_file = sorted(items, key=lambda x: x["name"])[-1]
+    # Python sort to ensure we get the last one chronologically (Latest)
+    # ISO timestamps (createdTime) sort correctly as strings
+    latest_file = sorted(items, key=lambda x: x["createdTime"])[-1]
     return latest_file
 
 
