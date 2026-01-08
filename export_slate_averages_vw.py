@@ -8,6 +8,7 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 import os
+import mappings
 
 # from datetime import datetime
 from thefuzz import process
@@ -71,6 +72,10 @@ def run_slate_averages_pipeline():
         final_names_to_query = []
 
         for dk_name in dk_names:
+            # Check for explicit mapping before fuzzy matching
+            if dk_name in mappings.PLAYER_NAME_MAP:
+                dk_name = mappings.PLAYER_NAME_MAP[dk_name]
+
             match, score = process.extractOne(dk_name, valid_db_names)
             if score >= 90:
                 final_names_to_query.append(match)

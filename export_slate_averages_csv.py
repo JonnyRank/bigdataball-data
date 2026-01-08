@@ -12,6 +12,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import os
 from datetime import datetime
+import mappings
 from thefuzz import process
 
 
@@ -80,6 +81,10 @@ def run_slate_averages_smart_export():
         unmatched_names = []
 
         for dk_name in dk_names:
+            # Check for explicit mapping before fuzzy matching
+            if dk_name in mappings.PLAYER_NAME_MAP:
+                dk_name = mappings.PLAYER_NAME_MAP[dk_name]
+
             # Extract the best match from the DB list
             match, score = process.extractOne(dk_name, valid_db_names)
 

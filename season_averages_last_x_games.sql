@@ -4,7 +4,7 @@
 -- (unless they haven't played X games yet this season).
 
 WITH Params AS (
-    SELECT 6 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
+    SELECT 5 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
 ),
 SeasonLogs AS (
     SELECT
@@ -57,7 +57,7 @@ CROSS JOIN
     Params p
 WHERE
     1=1
-    AND sl.PLAYER_NAME = 'Jordan Walsh' -- <--- Filter by Player Name
+    AND sl.PLAYER_NAME = 'Jalen Johnson' -- <--- Filter by Player Name
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,
