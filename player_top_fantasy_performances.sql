@@ -27,11 +27,11 @@ round(fl.USAGE, 1) as USG
 from fantasy_logs fl
 LEFT JOIN player_logs pl ON fl.PLAYER_ID = pl.PLAYER_ID AND fl.GAME_ID = pl.GAME_ID
 LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-where fl.Player = 'Spencer Jones'
+where fl.Player = 'Ivica Zubac'
 --and mt.TEAM_ABBREVIATION = 'TOR'
 --and fl.STARTED = 'Y'
 --and fl.SEASON_SEGMENT = 'NBA 2025-2026 Regular Season'
---and fl.DATE >= '2025-02-01'
+and fl.DATE >= '2026-01-03'
 --AND DKPTS >= 15
-ORDER by DKPTS DESC;
---order by fl.DATE DESC;
+--ORDER by DKPTS DESC;
+order by fl.DATE DESC;
