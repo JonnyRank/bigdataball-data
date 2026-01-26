@@ -3,7 +3,7 @@ select
 --fl.SEASON_SEGMENT,
 fl.DATE,
 fl.PLAYER,
-mt.TEAM_ABBREVIATION as TEAM,
+--mt.TEAM_ABBREVIATION as TEAM,
 fl.OPPONENT,
 fl.STARTED,
 CAST(round(DK_SALARY, 0) AS INTEGER) as SALARY,
@@ -27,11 +27,12 @@ round(fl.USAGE, 1) as USG
 from fantasy_logs fl
 LEFT JOIN player_logs pl ON fl.PLAYER_ID = pl.PLAYER_ID AND fl.GAME_ID = pl.GAME_ID
 LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-where fl.Player = 'Ivica Zubac'
---and mt.TEAM_ABBREVIATION = 'TOR'
+where fl.Player = 'James Harden'
+--WHERE mt.TEAM_ABBREVIATION = 'MIA'
 --and fl.STARTED = 'Y'
 --and fl.SEASON_SEGMENT = 'NBA 2025-2026 Regular Season'
-and fl.DATE >= '2026-01-03'
+and fl.DATE >= '2025-10-21'
+--and fl.DATE BETWEEN '2025-12-12' AND '2025-12-17'
 --AND DKPTS >= 15
 --ORDER by DKPTS DESC;
-order by fl.DATE DESC;
+order by fl.DATE desc;

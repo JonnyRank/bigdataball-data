@@ -10,7 +10,7 @@ WITH TargetPlayerIds AS (
     -- This avoids issues with name variations in the raw logs.
     SELECT PLAYER_ID
     FROM dim_players
-    WHERE PLAYER_NAME IN ('Joel Embiid')
+    WHERE PLAYER_NAME IN ('Devin Booker')
 ),
 TargetGameDates AS (
     -- Get a distinct list of dates where AT LEAST ONE of the target players played.
@@ -26,42 +26,42 @@ PlayerStats AS (
         mt.TEAM_ABBREVIATION as TEAM,
 
         -- Games Played in each scenario
-        COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END) as GP_With_Any,
-        COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END) as GP_Both_Out,
+        COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END) as GP_W_Booker,
+        COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END) as GP_WO_Booker,
 
         -- Averages for games ON dates where at least one played
         ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_With_Any,
         ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE IN TargetGameDates THEN fl.GAME_ID END), 0), 1) as MPG_With_Any,
-        ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_With_Any,
+        ROUND(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_W_Booker,
 
         -- Averages for games ON dates where BOTH were OUT
         ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END), 0), 2) as DKPPG_Both_Out,
         ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.MINUTES ELSE 0 END) / NULLIF(COUNT(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.GAME_ID END), 0), 1) as MPG_Both_Out,
-        ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_Both_Out
+        ROUND(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.DK_POINTS ELSE 0 END) / NULLIF(SUM(CASE WHEN fl.DATE NOT IN TargetGameDates THEN fl.MINUTES END), 0), 2) as FPPM_WO_Booker
 
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-    WHERE fl.DATE >= '2024-10-21'
-      AND mt.TEAM_ABBREVIATION = 'PHI'
+    WHERE fl.DATE >= '2025-10-21'
+      AND mt.TEAM_ABBREVIATION = 'PHX'
       AND fl.PLAYER_ID NOT IN (SELECT PLAYER_ID FROM TargetPlayerIds) -- Exclude the stars themselves
     GROUP BY
         fl.PLAYER,
         mt.TEAM_ABBREVIATION
     HAVING
         -- Only include players who played at least once when both were out
-        GP_Both_Out > 0
+        GP_WO_Booker > 0
 )
 SELECT
     PLAYER,
     TEAM,
-    GP_With_Any,
-    DKPPG_With_Any,
-    GP_Both_Out,
-    DKPPG_Both_Out,
-    FPPM_With_Any,
-    FPPM_Both_Out,
+    GP_W_Booker,
+    --DKPPG_With_Any,
+    GP_WO_Booker,
+    --DKPPG_Both_Out,
+    FPPM_W_Booker,
+    FPPM_WO_Booker,
     -- Calculate the difference in FPPM. Positive number means they are better when stars are OUT.
-    ROUND(FPPM_Both_Out - FPPM_With_Any, 2) AS FPPM_DIFF
+    ROUND(FPPM_WO_Booker - FPPM_W_Booker, 2) AS FPPM_DIFF
 FROM PlayerStats
 ORDER BY
-    DKPPG_Both_Out DESC;
+    FPPM_DIFF ASC;

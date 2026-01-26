@@ -4,7 +4,7 @@
 -- (unless they haven't played X games yet this season).
 
 WITH Params AS (
-    SELECT 5 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
+    SELECT 4 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
 ),
 SeasonLogs AS (
     SELECT
@@ -57,7 +57,8 @@ CROSS JOIN
     Params p
 WHERE
     1=1
-    AND sl.PLAYER_NAME = 'Jalen Johnson' -- <--- Filter by Player Name
+    AND sl.PLAYER_NAME = 'James Harden' -- <--- Filter by Player Name
+    --and lt.TEAM_ABBREVIATION = 'MIA'
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,
