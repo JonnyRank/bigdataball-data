@@ -27,12 +27,13 @@ round(fl.USAGE, 1) as USG
 from fantasy_logs fl
 LEFT JOIN player_logs pl ON fl.PLAYER_ID = pl.PLAYER_ID AND fl.GAME_ID = pl.GAME_ID
 LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-where fl.Player = 'James Harden'
+where fl.Player = 'Bogdan Bogdanovic'
 --WHERE mt.TEAM_ABBREVIATION = 'MIA'
 --and fl.STARTED = 'Y'
 --and fl.SEASON_SEGMENT = 'NBA 2025-2026 Regular Season'
-and fl.DATE >= '2025-10-21'
+--and fl.DATE >= '2025-10-21'
 --and fl.DATE BETWEEN '2025-12-12' AND '2025-12-17'
 --AND DKPTS >= 15
---ORDER by DKPTS DESC;
-order by fl.DATE desc;
+and fl.DATE between '2023-12-01' and '2023-12-31'
+ORDER by DKPTS DESC;
+--order by fl.DATE desc;
