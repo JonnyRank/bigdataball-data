@@ -10,14 +10,14 @@ WITH TargetPlayerIds AS (
     -- This avoids issues with name variations in the raw logs.
     SELECT PLAYER_ID
     FROM dim_players
-    WHERE PLAYER_NAME IN ('Stephen Curry', 'Jimmy Butler')
+    WHERE PLAYER_NAME IN ('LeBron James', 'Anthony Davis', 'Luka Doncic')
 ),
 TargetGameDates AS (
     -- Get a distinct list of dates where AT LEAST ONE of the target players played.
     SELECT DISTINCT DATE
     FROM fantasy_logs
     WHERE PLAYER_ID IN (SELECT PLAYER_ID FROM TargetPlayerIds)
-      AND DATE >= '2025-10-21'
+      AND DATE >= '2024-10-21'
 ),
 PlayerStats AS (
     -- Second, calculate the aggregated stats for each player in both scenarios.
@@ -41,8 +41,8 @@ PlayerStats AS (
 
     FROM fantasy_logs fl
     LEFT JOIN map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
-    WHERE fl.DATE >= '2025-10-21'
-      AND mt.TEAM_ABBREVIATION = 'GSW'
+    WHERE fl.DATE >= '2024-10-21'
+      AND mt.TEAM_ABBREVIATION = 'LAL'
       AND fl.PLAYER_ID NOT IN (SELECT PLAYER_ID FROM TargetPlayerIds) -- Exclude the stars themselves
     GROUP BY
         fl.PLAYER,
@@ -50,7 +50,7 @@ PlayerStats AS (
     HAVING
         -- Only include players who played at least once when both were out
         GP_WO_Booker > 0
-        and DKPPG_Both_Out > 10
+        and DKPPG_Both_Out > 5
 )
 SELECT
     PLAYER,
