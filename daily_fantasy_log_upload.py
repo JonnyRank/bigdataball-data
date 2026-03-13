@@ -11,6 +11,7 @@ import glob
 import os
 import create_summary_tables
 import export_slate_averages_vw
+import export_slate_averages_csv
 import daily_player_upload
 import drive_ingestion
 import email_notifier
@@ -315,6 +316,16 @@ def main():
         print("Slate view update complete.")
     except Exception as e:
         error_msg = f"ERROR in Slate View Update: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
+
+    # --- Run the slate CSV export ---
+    print("\nStarting slate CSV export...")
+    try:
+        export_slate_averages_csv.run_slate_averages_smart_export()
+        print("Slate CSV export complete.")
+    except Exception as e:
+        error_msg = f"ERROR in Slate CSV Export: {e}"
         print(f"*** {error_msg} ***")
         pipeline_errors.append(error_msg)
 
