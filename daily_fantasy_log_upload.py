@@ -11,6 +11,7 @@ import glob
 import os
 import create_summary_tables
 import export_slate_averages_vw
+import export_playoffs_slate_averages_vw
 import export_slate_averages_csv
 import daily_player_upload
 import drive_ingestion
@@ -316,6 +317,19 @@ def main():
         print("Slate view update complete.")
     except Exception as e:
         error_msg = f"ERROR in Slate View Update: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
+
+    # --- Run the playoffs slate averages pipeline ---
+    print("\nStarting slate view update...")
+    unmatched_dk_players = []
+    try:
+        unmatched_dk_players = (
+            export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or []
+        )
+        print("Playoffs slate view update complete.")
+    except Exception as e:
+        error_msg = f"ERROR in Playoffs Slate View Update: {e}"
         print(f"*** {error_msg} ***")
         pipeline_errors.append(error_msg)
 
