@@ -4,7 +4,7 @@
 -- (unless they haven't played X games yet this season).
 
 WITH Params AS (
-    SELECT 4 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
+    SELECT 6 AS X -- <--- CHANGE THIS NUMBER to filter for last X games (e.g., 5, 10, 15)
 ),
 SeasonLogs AS (
     SELECT
@@ -20,7 +20,9 @@ SeasonLogs AS (
     LEFT JOIN
         map_teams mt ON fl.TEAM = mt.RAW_TEAM_NAME
     WHERE
-        (fl.SEASON_SEGMENT LIKE 'NBA 2025-2026%' OR fl.SEASON_SEGMENT LIKE 'NBA 2025 In-%')
+        (fl.SEASON_SEGMENT LIKE 'NBA 2026%' OR fl.SEASON_SEGMENT LIKE 'NBA 2025 In-%' OR fl.SEASON_SEGMENT LIKE 'NBA 2025-2026%')
+    /* WHERE
+        fl.SEASON_SEGMENT LIKE 'NBA 2026%' */
 ),
 LatestTeam AS (
     SELECT
@@ -37,18 +39,19 @@ SELECT
     lt.TEAM_ABBREVIATION AS TEAM,
     -- Season Averages
     COUNT(sl.GAME_ID) AS GP,
-    SUM(CASE WHEN sl.STARTED = 'Y' THEN 1 ELSE 0 END) AS GS,
+    --SUM(CASE WHEN sl.STARTED = 'Y' THEN 1 ELSE 0 END) AS GS,
     ROUND(AVG(sl.MINUTES), 1) AS MPG,
-    ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 1) AS GSMPG,
+    --ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 1) AS GSMPG,
     ROUND(AVG(sl.DK_POINTS), 2) AS FPPG,
-    ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END), 2) AS GSFPPG,
-    ROUND(IFNULL(SUM(sl.DK_POINTS) / NULLIF(SUM(sl.MINUTES), 0), 0), 2) AS FPPM,
-    ROUND(IFNULL(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 0), 0), 2) AS GSFPPM,
+    --ROUND(AVG(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END), 2) AS GSFPPG,
+    ROUND(IFNULL(SUM(sl.DK_POINTS) / NULLIF(SUM(sl.MINUTES), 0), 0), 2) AS FPPM
+    --ROUND(IFNULL(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.STARTED = 'Y' THEN sl.MINUTES END), 0), 0), 2) AS GSFPPM
+    /*,
     -- Last X Games Averages (Controlled by Params CTE)
     COUNT(CASE WHEN sl.game_rank <= p.X THEN sl.GAME_ID END) AS LX_GP,
     ROUND(AVG(CASE WHEN sl.game_rank <= p.X THEN sl.MINUTES END), 1) AS LX_MPG,
     ROUND(AVG(CASE WHEN sl.game_rank <= p.X THEN sl.DK_POINTS END), 2) AS LX_FPPG,
-    ROUND(IFNULL(SUM(CASE WHEN sl.game_rank <= p.X THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.game_rank <= p.X THEN sl.MINUTES END), 0), 0), 2) AS LX_FPPM
+    ROUND(IFNULL(SUM(CASE WHEN sl.game_rank <= p.X THEN sl.DK_POINTS END) / NULLIF(SUM(CASE WHEN sl.game_rank <= p.X THEN sl.MINUTES END), 0), 0), 2) AS LX_FPPM */
 FROM
     SeasonLogs sl
 JOIN
@@ -57,13 +60,15 @@ CROSS JOIN
     Params p
 WHERE
     1=1
-    AND sl.PLAYER_NAME = 'James Harden' -- <--- Filter by Player Name
-    --and lt.TEAM_ABBREVIATION = 'MIA'
+    --AND sl.PLAYER_NAME = 'James Harden' -- <--- Filter by Player Name
+    and lt.TEAM_ABBREVIATION in ('CLE', 'NYK') -- <--- Filter by Team Abbreviation
+    and sl.OPPONENT in ('Cleveland', 'New York') -- <--- Filter by Opponent Team
+    and sl.DATE >= '2026-05-19' -- <--- Filter by Date (e.g., last 30 days)
 GROUP BY
     sl.PLAYER_ID,
     sl.PLAYER_NAME,
     p.X,
     lt.TEAM_ABBREVIATION
 ORDER BY
-    lt.TEAM_ABBREVIATION ASC,
+    lt.TEAM_ABBREVIATION DESC,
     FPPG DESC;
