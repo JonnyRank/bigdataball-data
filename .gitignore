@@ -25,3 +25,6 @@ BigDataBall-Ingestion-Pipeline-Setup-Guide.md
 
 # Additional files to ignore (workspace, SQL queries, etc.)
 Python-Bigdataball-Project.code-workspace
+
+# SQL query files unused in scripts
+*.sql
