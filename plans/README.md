@@ -9,16 +9,16 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 
 ## Execution order & status
 
-| Plan | Title | Priority | Effort | Depends on | Status |
-|------|-------|----------|--------|------------|--------|
-| 001  | Re-encode `requirements.txt` as UTF-8 | P1 | S | — | TODO |
-| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | TODO |
-| 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | TODO |
-| 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | TODO |
-| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO |
-| 006  | Extract triplicated DraftKings load + fuzzy-match logic | P2 | M | 002 (005 recommended) | TODO |
-| 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | TODO |
-| 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (recommended) | TODO |
+| Plan | Title | Priority | Effort | Depends on | Status | Issue |
+|------|-------|----------|--------|------------|--------|-------|
+| 001  | Re-encode `requirements.txt` as UTF-8 | P1 | S | — | TODO | [#4](https://github.com/JonnyRank/bigdataball-data/issues/4) |
+| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | TODO | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
+| 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | TODO | [#6](https://github.com/JonnyRank/bigdataball-data/issues/6) |
+| 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | TODO | [#7](https://github.com/JonnyRank/bigdataball-data/issues/7) |
+| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
+| 006  | Extract triplicated DraftKings load + fuzzy-match logic | P2 | M | 002 (005 recommended) | TODO | [#9](https://github.com/JonnyRank/bigdataball-data/issues/9) |
+| 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | TODO | [#10](https://github.com/JonnyRank/bigdataball-data/issues/10) |
+| 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (recommended) | TODO | [#11](https://github.com/JonnyRank/bigdataball-data/issues/11) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
