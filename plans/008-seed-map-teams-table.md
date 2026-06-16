@@ -217,9 +217,12 @@ of any unmatched raw names.
 
 ### Step 3: Implement `main()`
 
+`os` and `sqlite3` are imported at the top of the file (see the `write_map_teams`
+snippet above); only the `import paths` stays inside `main()` as an intentional graceful
+fallback for when plan 005 isn't done yet.
+
 ```python
 def main():
-    import os
     try:
         import paths
         base = paths.resolve_base_data_path()
@@ -250,9 +253,49 @@ if __name__ == "__main__":
     main()
 ```
 
-Provide `_distinct_team_names(conn)` (returns `[]` if neither table exists; use
-`try/except sqlite3.OperationalError`) and `_canonical_rows()` (the 30 "City Nickname"
-keys mapped through `TEAM_ABBREVIATIONS`).
+Provide the two helpers used by `main()`:
+
+```python
+def _distinct_team_names(conn):
+    """Distinct raw TEAM values from fantasy_logs (then player_logs). [] if neither exists."""
+    names = []
+    for table in ("fantasy_logs", "player_logs"):
+        try:
+            rows = conn.execute(f"SELECT DISTINCT TEAM FROM {table}").fetchall()
+        except sqlite3.OperationalError:
+            continue  # table or column not present yet
+        names.extend(r[0] for r in rows if r[0] is not None)
+        if names:
+            break  # prefer fantasy_logs; fall through to player_logs only if empty
+    # de-duplicate while preserving order
+    seen = set()
+    return [n for n in names if not (n in seen or seen.add(n))]
+
+
+def _canonical_rows():
+    """Best-effort 30-row seed for an empty DB, keyed on 'City Nickname' raw names.
+
+    These keys are GUESSES (see the abbreviation caveat) and should be re-seeded from
+    real data after the first ingestion. Uses every 'two-word+' key in TEAM_ABBREVIATIONS
+    (the full 'city nickname' forms), title-cased back into a plausible raw name.
+    """
+    rows = []
+    for key, abbr in TEAM_ABBREVIATIONS.items():
+        if " " in key and key not in ("la clippers", "la lakers"):
+            rows.append((key.title(), abbr))
+    # Ensure exactly the 30 teams (dedupe by abbreviation, keep first).
+    seen = set()
+    unique = []
+    for raw, abbr in rows:
+        if abbr not in seen:
+            seen.add(abbr)
+            unique.append((raw, abbr))
+    return unique
+```
+
+> `_canonical_rows()` is a fallback only; the data-derived path in Step 2 is preferred.
+> If the title-cased keys don't yield exactly 30 unique abbreviations, adjust the filter
+> so all 30 teams appear — but remember these raw names are guesses to be re-seeded later.
 
 **Verify**: `python3 -m py_compile seed_map_teams.py` → exit 0.
 

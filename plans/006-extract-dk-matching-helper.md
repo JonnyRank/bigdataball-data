@@ -259,7 +259,7 @@ def test_exact_match_is_kept():
     assert unmatched == []
 
 
-def test_mapping_applied_before_fuzzy(monkeypatch):
+def test_mapping_applied_before_fuzzy():
     # mappings.PLAYER_NAME_MAP maps "GG Jackson" -> "Gregory Jackson"
     matched, unmatched = dk_matching.match_names(["GG Jackson"], ["Gregory Jackson"])
     assert matched == ["Gregory Jackson"]
