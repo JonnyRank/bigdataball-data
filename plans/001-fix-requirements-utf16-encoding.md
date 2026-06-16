@@ -83,7 +83,7 @@ urllib3==2.6.2
 |--------------------|-----------------------------------------------------|----------------------------------------------|
 | Inspect encoding   | `file requirements.txt`                             | reports `ASCII text` or `UTF-8` (not UTF-16) |
 | Verify content     | `cat requirements.txt`                              | the package list above, no stray characters  |
-| Count packages     | `grep -c '==' requirements.txt`                     | `37`                                          |
+| Count packages     | `grep -c '==' requirements.txt`                     | `36`                                          |
 
 ## Scope
 
@@ -124,7 +124,7 @@ accidentally changed.
 **Verify**:
 - `file requirements.txt` → output contains `ASCII text` or `UTF-8 Unicode text`, and
   does **not** contain `UTF-16`.
-- `grep -c '==' requirements.txt` → `37`
+- `grep -c '==' requirements.txt` → `36`
 - `head -1 requirements.txt` → `cachetools==6.2.4` (no leading garbage bytes)
 
 ### Step 2: Confirm pip can parse it
@@ -142,7 +142,7 @@ python3 -c "import pathlib; [print(l) for l in pathlib.Path('requirements.txt').
 ```
 
 **Verify**: the command reads the file as UTF-8 without a `UnicodeDecodeError` and
-prints the 37 package lines. (A network failure during `--dry-run` resolution is
+prints the 36 package lines. (A network failure during `--dry-run` resolution is
 acceptable — the goal is only that the file *parses*; a `UnicodeError` or "null bytes"
 error is a failure.)
 
@@ -156,7 +156,7 @@ Verification is the `file` + `grep -c` + parse check in Steps 1–2.
 ALL must hold:
 
 - [ ] `file requirements.txt` does not report `UTF-16`.
-- [ ] `grep -c '==' requirements.txt` returns `37`.
+- [ ] `grep -c '==' requirements.txt` returns `36`.
 - [ ] `python3 -c "open('requirements.txt', encoding='utf-8').read()"` exits 0 (no decode error).
 - [ ] `git diff --stat` shows only `requirements.txt` changed.
 - [ ] `plans/README.md` status row for 001 updated.
@@ -165,7 +165,7 @@ ALL must hold:
 
 Stop and report back (do not improvise) if:
 
-- The package count after conversion is not 37, or any pinned version differs from the
+- The package count after conversion is not 36, or any pinned version differs from the
   list in "Current state" (the conversion corrupted content).
 - The Python one-liner fails (e.g. the file is not valid UTF-16) and you cannot
   otherwise convert the file without retyping it.
