@@ -137,6 +137,16 @@ def match_names(dk_names, valid_db_names, threshold=MATCH_THRESHOLD):
     """
     matched = []
     unmatched = []
+    # Guard: process.extractOne raises on an empty choice list. If the DB/view returned
+    # no players (a fresh DB, or an out-of-season playoffs view), treat every DK name as
+    # unmatched rather than crashing the pipeline. This is a deliberate robustness
+    # improvement over the original inline code (which would crash here).
+    if not valid_db_names:
+        unmatched = [
+            f"{mappings.PLAYER_NAME_MAP.get(n, n)} (Best match: None, Score: 0)"
+            for n in dk_names
+        ]
+        return [], unmatched
     for dk_name in dk_names:
         if dk_name in mappings.PLAYER_NAME_MAP:
             dk_name = mappings.PLAYER_NAME_MAP[dk_name]
@@ -156,6 +166,10 @@ def to_sql_in_list(names):
 
 This preserves every observable behavior: header detection, the `Name`-column guard,
 mapping-before-fuzzy, the `>= 90` threshold, the de-dup via `set`, and the SQL escaping.
+The one **intentional** addition is the empty-`valid_db_names` guard in `match_names`
+(the original inline code would raise from `process.extractOne` on an empty choice list —
+e.g. a fresh DB or an out-of-season playoffs view); the guard returns all DK names as
+unmatched instead of crashing.
 
 ## Commands you will need
 
@@ -259,6 +273,14 @@ def test_below_threshold_is_unmatched():
     assert "Zzqx Nobody" in unmatched[0]
 
 
+def test_empty_db_list_does_not_crash():
+    # On a fresh DB / out-of-season view the choice list is empty; must not raise.
+    matched, unmatched = dk_matching.match_names(["LeBron James"], [])
+    assert matched == []
+    assert len(unmatched) == 1
+    assert "LeBron James" in unmatched[0]
+
+
 def test_sql_in_list_escapes_quotes():
     assert dk_matching.to_sql_in_list(["O'Neal", "Curry"]) == "O''Neal', 'Curry"
 ```
@@ -272,7 +294,8 @@ def test_sql_in_list_escapes_quotes():
 ## Test plan
 
 - New `tests/test_dk_matching.py` covers: exact match retained, mapping applied before
-  fuzzy match, sub-threshold name reported as unmatched, and SQL quote-escaping.
+  fuzzy match, sub-threshold name reported as unmatched, the empty-DB-list guard (no
+  crash), and SQL quote-escaping.
 - Existing 002–004 tests confirm the orchestrator still runs (the export functions are
   stubbed there, so this refactor doesn't affect them — that's expected).
 - Verification: `python3 -m pytest -q` → all pass.

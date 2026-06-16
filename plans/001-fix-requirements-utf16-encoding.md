@@ -107,22 +107,19 @@ urllib3==2.6.2
 
 ### Step 1: Re-encode the file as UTF-8 with LF line endings
 
-Convert the existing UTF-16 file to UTF-8. Use `iconv` (preserves content, strips the
-UTF-16 BOM and converts the encoding):
+Convert the existing UTF-16 file to UTF-8 with a portable Python one-liner. This works
+on Linux, macOS, and Windows (unlike `iconv`/`sed -i`, which vary by platform): Python's
+`utf-16` decoder consumes the BOM, and we normalize CRLF to LF and write UTF-8 with no
+BOM:
 
 ```
-iconv -f UTF-16LE -t UTF-8 requirements.txt | sed 's/\r$//' > requirements.utf8.txt
-mv requirements.utf8.txt requirements.txt
-```
-
-If the file still begins with a UTF-8 BOM (bytes `EF BB BF`), remove it:
-
-```
-sed -i '1s/^\xEF\xBB\xBF//' requirements.txt
+python3 -c "import pathlib; p = pathlib.Path('requirements.txt'); p.write_text(p.read_text(encoding='utf-16').replace('\r\n', '\n'), encoding='utf-8')"
 ```
 
 Do **not** retype the package list by hand — convert the existing file so no pin is
 accidentally changed.
+
+(If you prefer shell tools and they're available, `iconv -f UTF-16 -t UTF-8 requirements.txt | tr -d '\r' > out && mv out requirements.txt` is an alternative, but the Python one-liner above is the recommended portable approach.)
 
 **Verify**:
 - `file requirements.txt` → output contains `ASCII text` or `UTF-8 Unicode text`, and
@@ -170,7 +167,8 @@ Stop and report back (do not improvise) if:
 
 - The package count after conversion is not 37, or any pinned version differs from the
   list in "Current state" (the conversion corrupted content).
-- `iconv` is unavailable and you cannot otherwise convert the file without retyping it.
+- The Python one-liner fails (e.g. the file is not valid UTF-16) and you cannot
+  otherwise convert the file without retyping it.
 - `file requirements.txt` already reports UTF-8/ASCII before you start (the file was
   fixed by another change — drift; report and stop).
 

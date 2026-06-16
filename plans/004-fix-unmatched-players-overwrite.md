@@ -160,17 +160,37 @@ import sys
 import pytest
 
 
+# Pipeline modules with import-time state (BASE_DATA_PATH / engine / os.makedirs).
+# The orchestrator imports all of these at load time, so they must be dropped from the
+# module cache before the orchestrator import (so they re-initialize against THIS test's
+# temp dir) and again afterward (so a later test never reuses a module bound to this
+# now-deleted tmp_path).
+_STATEFUL_MODULES = [
+    "daily_fantasy_log_upload",
+    "daily_player_upload",
+    "create_summary_tables",
+    "export_slate_averages_vw",
+    "export_playoffs_slate_averages_vw",
+    "export_slate_averages_csv",
+    "drive_ingestion",
+]
+
+
 @pytest.fixture
 def orchestrator(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     (data_dir / "Daily_Fantasy_Logs").mkdir(parents=True)
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
-    # pop + import_module yields a fresh import that reads the env var; do not also
-    # call importlib.reload (it would re-run module-level code a second time).
-    sys.modules.pop("daily_fantasy_log_upload", None)
+    # Drop cached pipeline modules so they re-init against this temp dir on import.
+    # (pop + import_module yields a fresh import that reads the env var; do not also
+    # call importlib.reload — it would re-run module-level code a second time.)
+    for name in _STATEFUL_MODULES:
+        sys.modules.pop(name, None)
     mod = importlib.import_module("daily_fantasy_log_upload")
     yield mod
-    sys.modules.pop("daily_fantasy_log_upload", None)
+    # Clean up so no later test reuses a module bound to this (deleted) tmp_path.
+    for name in _STATEFUL_MODULES:
+        sys.modules.pop(name, None)
 
 
 def test_unmatched_uses_regular_season_not_playoffs(orchestrator, monkeypatch):
