@@ -226,7 +226,8 @@ def test_unmatched_uses_regular_season_not_playoffs(orchestrator, monkeypatch):
     # todo_mappings.txt must contain the regular-season name, not the playoffs one.
     todo_path = os.path.join(mod.BASE_DATA_PATH, "todo_mappings.txt")
     assert os.path.exists(todo_path)
-    todo = open(todo_path).read()
+    with open(todo_path) as f:
+        todo = f.read()
     assert "RegOnly Player" in todo
     assert "PlayoffOnly Player" not in todo
 ```
