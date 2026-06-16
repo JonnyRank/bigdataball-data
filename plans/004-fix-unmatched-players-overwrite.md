@@ -165,9 +165,10 @@ def orchestrator(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     (data_dir / "Daily_Fantasy_Logs").mkdir(parents=True)
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
+    # pop + import_module yields a fresh import that reads the env var; do not also
+    # call importlib.reload (it would re-run module-level code a second time).
     sys.modules.pop("daily_fantasy_log_upload", None)
     mod = importlib.import_module("daily_fantasy_log_upload")
-    importlib.reload(mod)
     yield mod
     sys.modules.pop("daily_fantasy_log_upload", None)
 

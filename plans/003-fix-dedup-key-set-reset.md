@@ -223,5 +223,13 @@ Stop and report back (do not improvise) if:
   the initial keys.
 - This bug only manifests with ≥2 files in the input folder in one run; the regression
   test makes that scenario explicit so it can't silently regress.
+- **Coverage gap (known):** only the `daily_player_upload.py` path gets a direct
+  regression test. The identical fix to `daily_fantasy_log_upload.py`'s loop is verified
+  structurally (`py_compile` + the single-match `grep`), and plan 004's orchestrator test
+  *stubs* the fantasy upload rather than exercising its loop. If the two scripts ever
+  diverge in structure, this gap could let the bug return on the fantasy path. A
+  follow-on `tests/test_daily_fantasy_log_upload.py` mirroring plan 002's fixture (with a
+  fantasy-feed `.xlsx` builder: junk row 0, headers on row 1, junk row 2, data from row 3,
+  read via `header=1` then `.iloc[1:]`) would close it; deferred to keep this plan small.
 - If a future change starts re-reading `existing_logs_df` inside the loop, the same
   class of bug could return — keep the single-initialization invariant.

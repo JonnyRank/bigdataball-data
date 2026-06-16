@@ -215,18 +215,15 @@ def player_upload(tmp_path, monkeypatch):
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
 
     # Force a fresh import so the module-level path/engine code re-runs with the env var.
+    # (pop + import_module already yields a fresh import that reads the env var; do NOT
+    # also call importlib.reload here — that would re-run module-level code a second time,
+    # creating the engine twice and calling os.makedirs twice.)
     sys.modules.pop("daily_player_upload", None)
     module = importlib.import_module("daily_player_upload")
-    importlib.reload(module)
 
     yield module
 
     sys.modules.pop("daily_player_upload", None)
-
-
-def count_rows(engine, table):
-    import pandas as pd
-    return len(pd.read_sql_query(f"SELECT * FROM {table}", engine))
 ```
 
 **Verify**: covered by Step 5's test run.

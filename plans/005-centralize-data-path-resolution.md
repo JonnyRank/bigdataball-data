@@ -154,7 +154,6 @@ Do this one file at a time and run `python3 -m py_compile <file>` after each.
 Create `tests/test_paths.py`:
 ```python
 import importlib
-import os
 
 
 def test_env_override_wins(monkeypatch):
@@ -170,7 +169,7 @@ def test_fallback_to_local_data(monkeypatch):
     importlib.reload(paths)
     result = paths.resolve_base_data_path()
     # On a machine without the G: mount, this is <repo>/Data.
-    assert result.endswith(os.path.join("", "Data")) or result.endswith("Data")
+    assert result.endswith("Data")
 ```
 
 **Verify**: `python3 -m pytest -q tests/test_paths.py` → passes.

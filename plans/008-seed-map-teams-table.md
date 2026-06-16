@@ -100,9 +100,19 @@ abbreviation, covering the formats BigDataBall is most likely to emit (full city
 "City Nickname"). Normalize by lower-casing and collapsing whitespace when looking up, so
 `"Boston"`, `"boston"`, and `"Boston Celtics"` can all resolve.
 
+> **Abbreviation convention — confirm before committing.** The values below use the
+> short forms `GS` / `NY` / `NO` / `SA` for Golden State / Knicks / Pelicans / Spurs. The
+> common *industry-standard* forms are `GSW` / `NYK` / `NOP` / `SAS`. Which convention the
+> existing pipeline uses is **unknown from this repo** (the DB is git-ignored and no other
+> script commits abbreviations). Before committing, check any existing `TEAM` /
+> abbreviation usage in real data and adjust these values to match the convention already
+> in use. If you cannot determine it, STOP and ask the maintainer rather than guessing.
+
 ```python
-# Standard NBA abbreviations keyed by several plausible raw-name forms.
+# NBA abbreviations keyed by several plausible raw-name forms.
 # Keys are matched case-insensitively after whitespace normalization.
+# NOTE: confirm the abbreviation convention (GS vs GSW, NY vs NYK, NO vs NOP, SA vs SAS,
+# PHX vs PHO) against the real data before committing — see the caveat above.
 TEAM_ABBREVIATIONS = {
     "atlanta": "ATL", "atlanta hawks": "ATL",
     "boston": "BOS", "boston celtics": "BOS",
@@ -160,12 +170,36 @@ The script's `main()` connects to the DB at `paths.resolve_base_data_path()/nba_
    guess), and print a clear warning that these may not match the eventual ingested data
    and should be re-seeded after the first ingestion.
 
-Create or replace the table each run:
+Create or replace the table each run. The writer **refuses to overwrite a `map_teams`
+table that already has rows** unless an explicit override is set — this prevents a
+re-run from silently destroying hand-curated mappings in a real DB. The temp-DB tests
+and an empty/first-time DB are unaffected (no existing rows).
+
 ```python
+import os
 import sqlite3
 
-def write_map_teams(conn, rows):
-    """rows: list of (raw_team_name, team_abbreviation_or_None)."""
+
+def _map_teams_row_count(conn):
+    try:
+        return conn.execute("SELECT COUNT(*) FROM map_teams").fetchone()[0]
+    except sqlite3.OperationalError:
+        return 0  # table doesn't exist yet
+
+
+def write_map_teams(conn, rows, force=None):
+    """rows: list of (raw_team_name, team_abbreviation_or_None).
+
+    Refuses to overwrite a populated map_teams unless `force` is truthy (defaults to the
+    BIGDATABALL_SEED_FORCE env var). Raises RuntimeError otherwise.
+    """
+    if force is None:
+        force = bool(os.environ.get("BIGDATABALL_SEED_FORCE"))
+    if _map_teams_row_count(conn) > 0 and not force:
+        raise RuntimeError(
+            "map_teams already has rows; refusing to overwrite. "
+            "Re-run with BIGDATABALL_SEED_FORCE=1 to replace it."
+        )
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS map_teams")
     cur.execute(
@@ -271,6 +305,21 @@ def test_write_map_teams_schema(tmp_path):
     assert cols == ["RAW_TEAM_NAME", "TEAM_ABBREVIATION"]
     rows = conn.execute("SELECT RAW_TEAM_NAME, TEAM_ABBREVIATION FROM map_teams ORDER BY RAW_TEAM_NAME").fetchall()
     assert rows == [("Boston", "BOS"), ("Mystery Team", None)]
+    conn.close()
+
+
+def test_write_map_teams_refuses_to_overwrite_without_force(tmp_path):
+    import pytest
+
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    seed_map_teams.write_map_teams(conn, [("Boston", "BOS")])  # first write: empty -> ok
+    with pytest.raises(RuntimeError):
+        seed_map_teams.write_map_teams(conn, [("Denver", "DEN")])  # populated -> refused
+    # force=True overwrites
+    seed_map_teams.write_map_teams(conn, [("Denver", "DEN")], force=True)
+    rows = conn.execute("SELECT RAW_TEAM_NAME FROM map_teams").fetchall()
+    assert rows == [("Denver",)]
     conn.close()
 ```
 
