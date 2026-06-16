@@ -329,6 +329,8 @@ Create `tests/test_seed_map_teams.py`:
 ```python
 import sqlite3
 
+import pytest
+
 import seed_map_teams
 
 
@@ -352,8 +354,6 @@ def test_write_map_teams_schema(tmp_path):
 
 
 def test_write_map_teams_refuses_to_overwrite_without_force(tmp_path):
-    import pytest
-
     db = tmp_path / "t.db"
     conn = sqlite3.connect(db)
     seed_map_teams.write_map_teams(conn, [("Boston", "BOS")])  # first write: empty -> ok
