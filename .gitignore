@@ -28,3 +28,6 @@ Python-Bigdataball-Project.code-workspace
 
 # SQL query files unused in scripts
 *.sql
+
+# Claude Code executor worktrees (ephemeral, never commit)
+.claude/worktrees/
