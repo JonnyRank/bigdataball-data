@@ -23,6 +23,7 @@ python drive_ingestion.py            # download latest .xlsx from Google Drive
 python daily_player_upload.py        # ingest player box-score logs only
 python create_summary_tables.py      # rebuild fantasy_averages + player-average views
 python export_slate_averages_vw.py   # rebuild vw_daily_slate / vw_daily_slate_l30
+python export_playoffs_slate_averages_vw.py  # rebuild vw_daily_slate_playoffs
 python export_slate_averages_csv.py  # export slate averages to timestamped CSV
 python run_db_patch.py               # one-time retroactive player-name fix
 python verify_db_patch.py            # verify the name patch
@@ -36,7 +37,7 @@ There is **no test suite, linter, or build step.** Validate changes by reading c
 
 These patterns are repeated across nearly every script — understanding them is the key to working here:
 
-- **Dual data-path resolution.** Every script independently checks `if os.path.exists(r"G:\My Drive")` and uses `G:\My Drive\Documents\bigdataball` on the developer's machine, else falls back to a local `Data/` directory under the project root. The SQLite DB, input folders, and archive folders all live under this base path. This is duplicated per-file rather than centralized in `config.py` (which only holds Drive/email config).
+- **Dual data-path resolution.** The DB/upload/export scripts each independently check `if os.path.exists(r"G:\My Drive")` and use `G:\My Drive\Documents\bigdataball` on the developer's machine, else fall back to a local `Data/` directory under the project root. The SQLite DB, input folders, and archive folders all live under this base path. This is duplicated per-file rather than centralized. **Exception:** `config.py` hardcodes `BASE_DOWNLOAD_DIR = r"G:\My Drive\..."` with no fallback, and `drive_ingestion.py` downloads to those `config.DATASET_JOBS` paths — so Drive ingestion has no local-`Data/` fallback and effectively requires the `G:` mount.
 
 - **Two database access styles coexist.** Scripts use SQLAlchemy (`create_engine`, `text()`, `engine.begin()`) and pandas `to_sql()`/`read_sql()`, and some use raw `sqlite3`. Match the style of the file you're editing.
 
