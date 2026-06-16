@@ -31,8 +31,6 @@ python verify_db_patch.py            # verify the name patch
 
 There is **no test suite, linter, or build step.** Validate changes by reading console output, inspecting the SQLite DB directly, and running `verify_db_patch.py` after name-mapping changes.
 
-> `requirements.txt` is UTF-16 encoded (it reads as null bytes between characters when viewed as UTF-8). If `pip install -r requirements.txt` fails to parse, re-save it as UTF-8 first.
-
 ## Architecture and cross-cutting conventions
 
 These patterns are repeated across nearly every script — understanding them is the key to working here:
