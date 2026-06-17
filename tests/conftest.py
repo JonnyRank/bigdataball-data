@@ -1,7 +1,67 @@
 import importlib
 import sys
+import types
 
 import pytest
+
+_FANTASY_DEPS = [
+    "daily_fantasy_log_upload",
+    "daily_player_upload",
+    "create_summary_tables",
+    "export_slate_averages_vw",
+    "export_playoffs_slate_averages_vw",
+    "export_slate_averages_csv",
+    "email_notifier",
+    "drive_ingestion",
+]
+
+# Modules that require external services (Google APIs, SMTP) and must be stubbed
+# so the fixture can import daily_fantasy_log_upload without network/credential deps.
+_STUB_MODULES = {
+    "drive_ingestion": {"main": lambda: None},
+    "googleapiclient": {},
+    "googleapiclient.discovery": {},
+    "google": {},
+    "google.oauth2": {},
+    "google.oauth2.credentials": {},
+    "google_auth_oauthlib": {},
+    "google_auth_oauthlib.flow": {},
+}
+
+
+@pytest.fixture
+def fantasy_upload(tmp_path, monkeypatch):
+    """Imports daily_fantasy_log_upload fresh with BASE_DATA_PATH pointed at a temp dir.
+    Returns the imported module; its engine, paths, and tables all live under tmp_path."""
+    data_dir = tmp_path / "data"
+    (data_dir / "Daily_Fantasy_Logs").mkdir(parents=True)
+    (data_dir / "Daily_Player_Logs").mkdir(parents=True)
+    (data_dir / "Archived_Fantasy_Logs").mkdir(parents=True)
+    (data_dir / "Archived_Player_Logs").mkdir(parents=True)
+    monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
+
+    for name in _FANTASY_DEPS:
+        sys.modules.pop(name, None)
+
+    # Stub modules that pull in external service dependencies
+    stub_names_added = []
+    for mod_name, attrs in _STUB_MODULES.items():
+        if mod_name not in sys.modules:
+            stub = types.ModuleType(mod_name)
+            for attr, val in attrs.items():
+                setattr(stub, attr, val)
+            sys.modules[mod_name] = stub
+            stub_names_added.append(mod_name)
+
+    module = importlib.import_module("daily_fantasy_log_upload")
+
+    yield module
+
+    module.engine.dispose()
+    for name in _FANTASY_DEPS:
+        sys.modules.pop(name, None)
+    for name in stub_names_added:
+        sys.modules.pop(name, None)
 
 
 @pytest.fixture

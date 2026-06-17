@@ -2,11 +2,7 @@ import os
 
 import pandas as pd
 
-from tests.helpers import write_player_xlsx, make_rows
-
-
-def _count(engine, table):
-    return len(pd.read_sql_query(f"SELECT * FROM {table}", engine))
+from tests.helpers import write_player_xlsx, make_rows, count_rows
 
 
 def test_single_file_loads_logs_and_learns_players(player_upload):
@@ -21,8 +17,8 @@ def test_single_file_loads_logs_and_learns_players(player_upload):
     processed, overwritten = mod.main()
 
     assert processed == 1
-    assert _count(mod.engine, "player_logs") == 3      # all three game logs inserted
-    assert _count(mod.engine, "dim_players") == 2      # two distinct players learned
+    assert count_rows(mod.engine, "player_logs") == 3      # all three game logs inserted
+    assert count_rows(mod.engine, "dim_players") == 2      # two distinct players learned
 
 
 def test_player_name_standardization_applied(player_upload):
@@ -46,9 +42,32 @@ def test_rerun_with_same_logs_inserts_no_duplicates(player_upload):
     # First run
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
     mod.main()
-    assert _count(mod.engine, "player_logs") == 2
+    assert count_rows(mod.engine, "player_logs") == 2
 
     # Second run with an identical file (dedup is against rows already in the DB)
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed2.xlsx"), rows)
     mod.main()
-    assert _count(mod.engine, "player_logs") == 2  # still 2 — no duplicates
+    assert count_rows(mod.engine, "player_logs") == 2  # still 2 — no duplicates
+
+
+def test_dedup_across_files_in_one_run(player_upload):
+    """Two cumulative files in the input folder must not produce duplicate logs.
+    Regression test for the existing_log_keys reset bug."""
+    mod = player_upload
+    file1_rows = make_rows([
+        (1, "Alpha Player", "2025-11-01", 30),
+        (1, "Alpha Player", "2025-11-02", 25),
+    ])
+    # file2 is a cumulative file: it repeats file1's logs and adds one new game.
+    file2_rows = make_rows([
+        (1, "Alpha Player", "2025-11-01", 30),
+        (1, "Alpha Player", "2025-11-02", 25),
+        (1, "Alpha Player", "2025-11-03", 28),
+    ])
+    write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_01.xlsx"), file1_rows)
+    write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_02.xlsx"), file2_rows)
+
+    mod.main()  # processes both files in one run (sorted: feed_01 then feed_02)
+
+    # Exactly 3 distinct game logs — the two from file1 must NOT be re-inserted from file2.
+    assert count_rows(mod.engine, "player_logs") == 3

@@ -33,7 +33,6 @@ DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 
 # Ensure the processed folder exists
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # Database Configuration
 LOGS_TABLE_NAME = "player_logs"
@@ -102,6 +101,10 @@ def main():
         return 0, 0
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
+
+    # Initialize ONCE before the loop so keys added per file accumulate across files
+    # processed in the same run (prevents re-inserting logs from an earlier file).
+    existing_log_keys = set(existing_logs_df["log_key"])
 
     processed_count = 0
     overwritten_count = 0
@@ -190,8 +193,6 @@ def main():
                 cleaned_data["PLAYER_ID"].astype(str) + "_" + cleaned_data["DATE"]
             )
 
-            existing_log_keys = set(existing_logs_df["log_key"])
-
             # Filter for rows that are not already in the database
             truly_new_logs_df = cleaned_data[
                 ~cleaned_data["log_key"].isin(existing_log_keys)
@@ -220,7 +221,7 @@ def main():
                     )
                     truly_new_players_df_renamed = truly_new_players_df_for_dim.rename(
                         columns={"PLAYER": "PLAYER_NAME"}
-                    ).rename(columns={"PLAYER_ID": "PLAYER_ID"})
+                    )
                     truly_new_players_df_renamed.to_sql(
                         PLAYERS_TABLE_NAME, con=engine, if_exists="append", index=False
                     )
