@@ -19,6 +19,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 006  | Extract triplicated DraftKings load + fuzzy-match logic | P2 | M | 002 (005 recommended) | TODO | [#9](https://github.com/JonnyRank/bigdataball-data/issues/9) |
 | 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | TODO | [#10](https://github.com/JonnyRank/bigdataball-data/issues/10) |
 | 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (recommended) | TODO | [#11](https://github.com/JonnyRank/bigdataball-data/issues/11) |
+| 009  | Convert flat layout to a `src/bigdataball/` package | P2 | M | none (rebases paths of 003–008) | TODO | — |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -48,6 +49,13 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   no hard logic dependency.
 - **008 recommended after 005** so it can call `paths.resolve_base_data_path()`; it has an
   inline fallback if 005 isn't done yet.
+- **009 (src layout) is independent but rebases everything else.** It moves all 14 modules
+  into `src/bigdataball/`, so after it lands the in-scope file paths in plans 003–008 change
+  from `<module>.py` to `src/bigdataball/<module>.py` (logic and line numbers unchanged).
+  Two orderings work: (a) do 003–008 first, then 009 last — no rebasing needed; or (b) do
+  009 now (as requested) and prepend `src/bigdataball/` to the paths when executing 003–008.
+  Note that 009's `PROJECT_ROOT` depth fix is later **superseded** by 005's `paths.py`
+  resolver, which must itself account for the `src/bigdataball/` depth.
 
 ## Findings considered and rejected (so they aren't re-audited)
 
