@@ -148,6 +148,10 @@ def main():
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
 
+    # Initialize ONCE before the loop so keys added per file accumulate across files
+    # processed in the same run (prevents re-inserting logs from an earlier file).
+    existing_log_keys = set(existing_logs_df["log_key"])
+
     fantasy_logs_count = 0
     fantasy_logs_overwritten = 0
     for file_path in files_to_process:
@@ -222,8 +226,6 @@ def main():
             cleaned_data["log_key"] = (
                 cleaned_data["PLAYER_ID"].astype(str) + "_" + cleaned_data["DATE"]
             )
-
-            existing_log_keys = set(existing_logs_df["log_key"])
 
             # Filter for rows that are not already in the database
             truly_new_logs_df = cleaned_data[
