@@ -59,6 +59,13 @@ DUP_ROWS = [
     (2, "Beta", "2025-11-01", 10),
 ]
 
+# fantasy_logs equivalent: player 1 / 11-01 duplicated, 11-02 unique.
+DUP_FANTASY_ROWS = [
+    (1, "Alpha", "2025-11-01", 45.0),
+    (1, "Alpha", "2025-11-01", 45.0),
+    (1, "Alpha", "2025-11-02", 38.5),
+]
+
 
 def test_get_stats_counts_duplicates(dedup_tool):
     mod = dedup_tool
@@ -115,3 +122,57 @@ def test_remove_on_clean_db_is_noop(dedup_tool, monkeypatch):
     assert mod.main() == 0                  # no duplicates -> success
     assert _count(mod.DB_PATH, "player_logs") == 2      # unchanged
     assert _backups(os.path.dirname(mod.DB_PATH)) == []  # nothing removed -> no backup
+
+
+def test_remove_dedupes_fantasy_logs(dedup_tool, monkeypatch):
+    mod = dedup_tool
+    _seed(mod.DB_PATH, [], DUP_FANTASY_ROWS)  # player_logs clean, fantasy_logs dirty
+    monkeypatch.setattr(sys, "argv", ["check_ingest_duplicates.py", "--remove"])
+    assert mod.main() == 0
+    assert _count(mod.DB_PATH, "fantasy_logs") == 2     # one row per (PLAYER_ID, DATE)
+
+
+def test_table_filter_only_touches_named_table(dedup_tool, monkeypatch):
+    mod = dedup_tool
+    _seed(mod.DB_PATH, DUP_ROWS, DUP_FANTASY_ROWS)      # both tables dirty
+    monkeypatch.setattr(
+        sys, "argv", ["check_ingest_duplicates.py", "--remove", "--table", "player_logs"]
+    )
+    assert mod.main() == 0
+    assert _count(mod.DB_PATH, "player_logs") == 4      # deduped
+    assert _count(mod.DB_PATH, "fantasy_logs") == 3     # untouched (still has its dup)
+
+
+def test_non_exact_duplicate_warns_and_keeps_earliest(dedup_tool, monkeypatch, capsys):
+    mod = dedup_tool
+    # Same (PLAYER_ID, DATE) but DIFFERENT stats -> not byte-for-byte copies.
+    _seed(mod.DB_PATH, [
+        (1, "Alpha", "2025-11-01", 30),
+        (1, "Alpha", "2025-11-01", 35),
+    ])
+
+    # report() must surface the warning that the duplicates differ in other columns.
+    conn = sqlite3.connect(mod.DB_PATH)
+    try:
+        mod.report(conn, "player_logs")
+    finally:
+        conn.close()
+    assert "WARNING: some same-(PLAYER_ID, DATE) rows differ" in capsys.readouterr().out
+
+    # --remove still runs, keeping the earliest (MIN rowid) row -> PTS 30, not 35.
+    monkeypatch.setattr(sys, "argv", ["check_ingest_duplicates.py", "--remove"])
+    assert mod.main() == 0
+    conn = sqlite3.connect(mod.DB_PATH)
+    try:
+        rows = conn.execute("SELECT PTS FROM player_logs").fetchall()
+    finally:
+        conn.close()
+    assert rows == [(30,)]
+
+
+def test_missing_db_returns_nonzero(dedup_tool, monkeypatch):
+    mod = dedup_tool
+    # No _seed call -> DB_PATH does not exist.
+    assert not os.path.exists(mod.DB_PATH)
+    monkeypatch.setattr(sys, "argv", ["check_ingest_duplicates.py"])
+    assert mod.main() == 1
