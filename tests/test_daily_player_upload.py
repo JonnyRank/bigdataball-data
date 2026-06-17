@@ -5,10 +5,6 @@ import pandas as pd
 from tests.helpers import write_player_xlsx, make_rows, count_rows
 
 
-def _count(engine, table):
-    return count_rows(engine, table)
-
-
 def test_single_file_loads_logs_and_learns_players(player_upload):
     mod = player_upload
     rows = make_rows([
@@ -21,8 +17,8 @@ def test_single_file_loads_logs_and_learns_players(player_upload):
     processed, overwritten = mod.main()
 
     assert processed == 1
-    assert _count(mod.engine, "player_logs") == 3      # all three game logs inserted
-    assert _count(mod.engine, "dim_players") == 2      # two distinct players learned
+    assert count_rows(mod.engine, "player_logs") == 3      # all three game logs inserted
+    assert count_rows(mod.engine, "dim_players") == 2      # two distinct players learned
 
 
 def test_player_name_standardization_applied(player_upload):
@@ -46,12 +42,12 @@ def test_rerun_with_same_logs_inserts_no_duplicates(player_upload):
     # First run
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
     mod.main()
-    assert _count(mod.engine, "player_logs") == 2
+    assert count_rows(mod.engine, "player_logs") == 2
 
     # Second run with an identical file (dedup is against rows already in the DB)
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed2.xlsx"), rows)
     mod.main()
-    assert _count(mod.engine, "player_logs") == 2  # still 2 — no duplicates
+    assert count_rows(mod.engine, "player_logs") == 2  # still 2 — no duplicates
 
 
 def test_dedup_across_files_in_one_run(player_upload):
@@ -74,4 +70,4 @@ def test_dedup_across_files_in_one_run(player_upload):
     mod.main()  # processes both files in one run (sorted: feed_01 then feed_02)
 
     # Exactly 3 distinct game logs — the two from file1 must NOT be re-inserted from file2.
-    assert _count(mod.engine, "player_logs") == 3
+    assert count_rows(mod.engine, "player_logs") == 3

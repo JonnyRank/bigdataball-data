@@ -221,7 +221,7 @@ def main():
                     )
                     truly_new_players_df_renamed = truly_new_players_df_for_dim.rename(
                         columns={"PLAYER": "PLAYER_NAME"}
-                    ).rename(columns={"PLAYER_ID": "PLAYER_ID"})
+                    )
                     truly_new_players_df_renamed.to_sql(
                         PLAYERS_TABLE_NAME, con=engine, if_exists="append", index=False
                     )

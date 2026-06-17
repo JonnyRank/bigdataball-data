@@ -3,10 +3,6 @@ import os
 from tests.helpers import write_fantasy_xlsx, make_fantasy_rows, count_rows
 
 
-def _count(engine, table):
-    return count_rows(engine, table)
-
-
 def test_dedup_across_files_in_one_run(fantasy_upload):
     """Two cumulative fantasy log files in one run must not produce duplicate rows.
     Regression test for the existing_log_keys reset bug (symmetric with player upload)."""
@@ -27,4 +23,4 @@ def test_dedup_across_files_in_one_run(fantasy_upload):
     mod.main()  # processes both files in one run (sorted: feed_01 then feed_02)
 
     # Exactly 3 distinct game logs — feed_01's 2 rows must NOT be re-inserted from feed_02.
-    assert _count(mod.engine, "fantasy_logs") == 3
+    assert count_rows(mod.engine, "fantasy_logs") == 3
