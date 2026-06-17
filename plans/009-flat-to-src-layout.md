@@ -446,28 +446,9 @@ Machine-checkable. ALL must hold:
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
 - [ ] `python -m pytest -q` exits 0 with the same test count as before.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
-- [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (Step added below).
+- [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
 - [ ] `plans/README.md` status row for 009 updated to DONE.
-
-### Step 10: Wire the editable install into CI
-
-Edit `.github/workflows/test.yml`. In the "Install dependencies" step, add an
-editable install of the package after the requirements install, so CI validates
-`pyproject.toml`:
-
-```yaml
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-          pip install -e .
-```
-
-Leave the rest of the workflow unchanged.
-
-**Verify**: `python -m pytest -q` still passes locally (the CI change itself is
-validated when the workflow runs).
 
 ## STOP conditions
 
