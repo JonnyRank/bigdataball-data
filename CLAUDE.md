@@ -27,19 +27,32 @@ python export_playoffs_slate_averages_vw.py  # rebuild vw_daily_slate_playoffs
 python export_slate_averages_csv.py  # export slate averages to timestamped CSV
 python run_db_patch.py               # one-time retroactive player-name fix
 python verify_db_patch.py            # verify the name patch
+python check_ingest_duplicates.py            # report duplicate (PLAYER_ID, DATE) log rows
+python check_ingest_duplicates.py --remove   # back up DB, then delete the duplicates
 ```
 
-There is **no test suite, linter, or build step.** Validate changes by reading console output, inspecting the SQLite DB directly, and running `verify_db_patch.py` after name-mapping changes.
+### Tests
+
+A pytest suite lives under `tests/` (CI runs it via `.github/workflows/test.yml` on every push/PR):
+
+```bash
+pip install -r requirements-dev.txt      # pytest (separate from runtime deps)
+python -m pytest -q                      # full suite
+python -m pytest -q tests/test_check_ingest_duplicates.py            # one file
+python -m pytest -q -k dedup                                         # by keyword (matches tests with 'dedup')
+```
+
+`pytest.ini` sets `pythonpath = .` (so root-level modules import under a bare `pytest`) and `testpaths = tests`. Tests point the scripts at a throwaway data dir via the `BIGDATABALL_DATA_DIR` env override (see below) rather than touching the real DB. `tests/conftest.py` holds the `player_upload` fixture (imports an upload script fresh with the env var set); `tests/helpers.py` writes synthetic input `.xlsx` files. Validate non-tested changes by reading console output and inspecting the SQLite DB directly; run `verify_db_patch.py` after name-mapping changes.
 
 ## Architecture and cross-cutting conventions
 
 These patterns are repeated across nearly every script — understanding them is the key to working here:
 
-- **Dual data-path resolution.** The DB/upload/export scripts each independently check `if os.path.exists(r"G:\My Drive")` and use `G:\My Drive\Documents\bigdataball` on the developer's machine, else fall back to a local `Data/` directory under the project root. The SQLite DB, input folders, and archive folders all live under this base path. This is duplicated per-file rather than centralized. **Exception:** `config.py` hardcodes `BASE_DOWNLOAD_DIR = r"G:\My Drive\..."` with no fallback, and `drive_ingestion.py` downloads to those `config.DATASET_JOBS` paths — so Drive ingestion has no local-`Data/` fallback and effectively requires the `G:` mount.
+- **Data-path resolution (per-file, not centralized).** Each DB/upload/export script independently resolves a base path. The upload scripts and `check_ingest_duplicates.py` use a three-way check: `BIGDATABALL_DATA_DIR` env var (explicit override, used by tests and local runs) → `G:\My Drive\Documents\bigdataball` if the `G:` mount exists → local `Data/` under the project root. Older scripts (e.g. `verify_db_patch.py`) still use only the two-way `G:` / `Data/` check with no env override — match the file you're editing. The SQLite DB, input folders, and archive folders all live under this base path. **Exception:** `config.py` hardcodes `BASE_DOWNLOAD_DIR = r"G:\My Drive\..."` with no fallback, and `drive_ingestion.py` downloads to those `config.DATASET_JOBS` paths — so Drive ingestion has no local-`Data/` fallback and effectively requires the `G:` mount.
 
 - **Two database access styles coexist.** Scripts use SQLAlchemy (`create_engine`, `text()`, `engine.begin()`) and pandas `to_sql()`/`read_sql()`, and some use raw `sqlite3`. Match the style of the file you're editing.
 
-- **De-duplication via `log_key`.** Upload scripts build a composite `PLAYER_ID_DATE` key, load all existing keys before processing, skip rows already present, and update the in-memory key set after each file insert.
+- **De-duplication via `log_key`.** Upload scripts build a composite `PLAYER_ID_DATE` key, load all existing keys before processing, skip rows already present, and update the in-memory key set after each file insert. The dedup is **purely in-memory** — `player_logs` / `fantasy_logs` are created implicitly by `to_sql(..., if_exists="append")` and have no PRIMARY KEY or UNIQUE constraint, so nothing at the DB level blocks duplicate `(PLAYER_ID, DATE)` rows. `check_ingest_duplicates.py` is the safety net: it reports such duplicates and (with `--remove`) backs up the DB, then deletes extras keeping the earliest `rowid` per game. After a removal, rebuild the derived data (`create_summary_tables.py` + the slate exports) since duplicates inflate every average.
 
 - **Player name standardization.** `mappings.PLAYER_NAME_MAP` (variant name → canonical DB name, matching DraftKings convention) is the single source of truth. It's applied at ingestion (both upload scripts) and during DraftKings→DB matching (slate exports). When adding a mapping, add it to `mappings.py` and consider running `run_db_patch.py` to fix existing rows retroactively. DraftKings names that fail to match during a run are appended to `{BASE_DATA_PATH}/todo_mappings.txt` (and emailed as warnings) — that file is the worklist of mappings still to add.
 
