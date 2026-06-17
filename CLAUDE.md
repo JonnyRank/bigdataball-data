@@ -39,7 +39,7 @@ A pytest suite lives under `tests/` (CI runs it via `.github/workflows/test.yml`
 pip install -r requirements-dev.txt      # pytest (separate from runtime deps)
 python -m pytest -q                      # full suite
 python -m pytest -q tests/test_check_ingest_duplicates.py            # one file
-python -m pytest -q -k dedup                                         # one test by name
+python -m pytest -q -k dedup                                         # by keyword (matches tests with 'dedup')
 ```
 
 `pytest.ini` sets `pythonpath = .` (so root-level modules import under a bare `pytest`) and `testpaths = tests`. Tests point the scripts at a throwaway data dir via the `BIGDATABALL_DATA_DIR` env override (see below) rather than touching the real DB. `tests/conftest.py` holds the `player_upload` fixture (imports an upload script fresh with the env var set); `tests/helpers.py` writes synthetic input `.xlsx` files. Validate non-tested changes by reading console output and inspecting the SQLite DB directly; run `verify_db_patch.py` after name-mapping changes.
