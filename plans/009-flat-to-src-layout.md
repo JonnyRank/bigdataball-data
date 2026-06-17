@@ -258,6 +258,15 @@ module-reference name used elsewhere in each file is unchanged — only the
 
 **Verify**: `grep -rn -E "^import (mappings|config|create_summary_tables|export_|daily_player_upload|drive_ingestion|email_notifier)$|^from (auth_manager|config|mappings) import" src/bigdataball/` → **no matches** (all internal imports are now relative).
 
+> **Expected behavior after this step — NOT a bug to "fix".** Once the internal
+> imports are relative, running a module by its file path
+> (`python src/bigdataball/daily_player_upload.py`) will raise
+> `ImportError: attempted relative import with no known parent package`. This is
+> correct and intended. From here on, every module must be run as
+> `python -m bigdataball.<module>` (or exercised via the test suite). Do **not**
+> revert to bare/absolute imports to make direct file execution work — that
+> defeats the package layout. Step 9 updates the docs to the `-m` form.
+
 ### Step 3: Fix the `__file__`-based project-root resolution (the critical gotcha)
 
 In each of the **nine** files listed in the "Current state" table, the
