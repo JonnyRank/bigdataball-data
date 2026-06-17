@@ -21,4 +21,7 @@ def player_upload(tmp_path, monkeypatch):
 
     yield module
 
+    # Dispose the SQLAlchemy engine so its SQLite connection pool releases the
+    # DB file before tmp_path cleanup (otherwise Windows can't delete the locked file).
+    module.engine.dispose()
     sys.modules.pop("daily_player_upload", None)
