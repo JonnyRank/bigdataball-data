@@ -358,12 +358,15 @@ correct).
 ### Step 7: Import smoke test (all 14 modules)
 
 With the package installed (Step 4) confirm every module imports cleanly under
-the package namespace, including the relative imports. Use a throwaway data dir
+the package namespace, including the relative imports. The command below is a
+single pure-Python invocation (no shell-specific syntax — works on Windows,
+macOS, and Linux): it creates its own throwaway data dir with
+`tempfile.mkdtemp()` and points `BIGDATABALL_DATA_DIR` at it *before* importing,
 so the two modules that `os.makedirs(...)` at import time don't write into the
 repo:
 
 ```bash
-BIGDATABALL_DATA_DIR=$(mktemp -d) python -c "import importlib; [importlib.import_module('bigdataball.'+m) for m in ['auth_manager','check_ingest_duplicates','config','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','run_db_patch','verify_db_patch']]; print('ALL IMPORTS OK')"
+python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['auth_manager','check_ingest_duplicates','config','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','run_db_patch','verify_db_patch']]; print('ALL IMPORTS OK')"
 ```
 
 **Verify**: prints `ALL IMPORTS OK`, exit 0. If any module raises
