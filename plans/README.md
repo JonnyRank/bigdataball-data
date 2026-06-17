@@ -12,7 +12,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | Plan | Title | Priority | Effort | Depends on | Status | Issue |
 |------|-------|----------|--------|------------|--------|-------|
 | 001  | Re-encode `requirements.txt` as UTF-8 | P1 | S | — | DONE | [#4](https://github.com/JonnyRank/bigdataball-data/issues/4) |
-| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | TODO | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
+| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | DONE | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
 | 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | TODO | [#6](https://github.com/JonnyRank/bigdataball-data/issues/6) |
 | 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | TODO | [#7](https://github.com/JonnyRank/bigdataball-data/issues/7) |
 | 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
