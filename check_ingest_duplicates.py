@@ -67,8 +67,8 @@ were inflated):
 
 import argparse
 import os
-import shutil
 import sqlite3
+import sys
 from datetime import datetime
 
 # --- Configuration ---
@@ -100,7 +100,7 @@ def table_exists(conn, table):
 def get_stats(conn, table):
     """Return (total_rows, distinct_games, distinct_full_rows) for a table."""
     total_rows, distinct_games = conn.execute(
-        f'SELECT COUNT(*), COUNT(DISTINCT "PLAYER_ID" || \'_\' || "DATE") FROM {table}'
+        f"""SELECT COUNT(*), COUNT(DISTINCT "PLAYER_ID" || '_' || "DATE") FROM {table}"""
     ).fetchone()
     (distinct_full_rows,) = conn.execute(
         f"SELECT COUNT(*) FROM (SELECT DISTINCT * FROM {table})"
@@ -179,10 +179,16 @@ def remove(conn, table):
     print(f"\n=== {table} === removed {before - after} rows ({before} -> {after})")
 
 
-def backup_db():
+def backup_db(conn):
+    """Snapshot the live DB with SQLite's native backup API (handles WAL)."""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = f"{DB_PATH}.bak-{stamp}"
-    shutil.copy2(DB_PATH, backup_path)
+    dest = sqlite3.connect(backup_path)
+    try:
+        with dest:
+            conn.backup(dest)
+    finally:
+        dest.close()
     print(f"Backed up database to: {backup_path}")
     return backup_path
 
@@ -200,7 +206,7 @@ def main():
         "--table",
         choices=LOG_TABLES + ["all"],
         default="all",
-        help="Which table to operate on (default: all).",
+        help="Table to check/remove (player_logs | fantasy_logs | all).",
     )
     parser.add_argument(
         "--vacuum",
@@ -211,7 +217,7 @@ def main():
 
     if not os.path.exists(DB_PATH):
         print(f"Database not found at: {DB_PATH}")
-        return
+        return 1
 
     tables = LOG_TABLES if args.table == "all" else [args.table]
 
@@ -223,20 +229,28 @@ def main():
 
         if not args.remove:
             print("\n(Report only. Re-run with --remove to delete duplicates.)")
-            return
+            # Non-zero exit when duplicates exist, so the report is composable in
+            # shell/CI pipelines.
+            return 1 if extra_total else 0
 
         if extra_total == 0:
             print("\nNo duplicates to remove. Database left unchanged.")
-            return
+            return 0
 
         print("\n--- Removing duplicates ---")
-        backup_db()
+        backup_db(conn)
         for table in tables:
             remove(conn, table)
 
         if args.vacuum:
             print("\nRunning VACUUM...")
-            conn.execute("VACUUM")
+            # VACUUM cannot run inside a transaction; force autocommit for it.
+            old_isolation = conn.isolation_level
+            conn.isolation_level = None
+            try:
+                conn.execute("VACUUM")
+            finally:
+                conn.isolation_level = old_isolation
 
         print("\n--- Re-checking ---")
         remaining = sum(report(conn, t) for t in tables)
@@ -247,11 +261,12 @@ def main():
                 "export_slate_averages_vw.py, export_playoffs_slate_averages_vw.py, "
                 "export_slate_averages_csv.py"
             )
-        else:
-            print(f"\nWARNING: {remaining} extra rows still remain after removal.")
+            return 0
+        print(f"\nWARNING: {remaining} extra rows still remain after removal.")
+        return 1
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
