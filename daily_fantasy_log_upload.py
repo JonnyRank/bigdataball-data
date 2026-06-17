@@ -24,8 +24,11 @@ from datetime import datetime
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # HARDCODED PATHS FOR MIGRATION
-# Check if Google Drive (G:) exists
-if os.path.exists(r"G:\My Drive"):
+# An explicit override (used by tests and for local runs) wins; otherwise
+# use the Google Drive (G:) mount, else fall back to a local Data/ folder.
+if os.environ.get("BIGDATABALL_DATA_DIR"):
+    BASE_DATA_PATH = os.environ["BIGDATABALL_DATA_DIR"]
+elif os.path.exists(r"G:\My Drive"):
     BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
 else:
     # Fallback for non-synced machines
