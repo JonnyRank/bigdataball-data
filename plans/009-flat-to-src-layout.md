@@ -256,7 +256,7 @@ module-reference name used elsewhere in each file is unchanged — only the
   from . import mappings
   ```
 
-**Verify**: `grep -rn -E "^import (mappings|config|create_summary_tables|export_|daily_player_upload|drive_ingestion|email_notifier)$|^from (auth_manager|config|mappings) import" src/bigdataball/` → **no matches** (all internal imports are now relative).
+**Verify**: `grep -rn -E "^import (mappings|config|create_summary_tables|export_[a-z_]+|daily_player_upload|drive_ingestion|email_notifier)$|^from (auth_manager|config|mappings) import" src/bigdataball/` → **no matches** (all internal imports are now relative). The `export_[a-z_]+` branch matches all three export modules (`export_slate_averages_vw`, `export_playoffs_slate_averages_vw`, `export_slate_averages_csv`), not just a bare `export_`.
 
 > **Expected behavior after this step — NOT a bug to "fix".** Once the internal
 > imports are relative, running a module by its file path
@@ -450,7 +450,7 @@ Machine-checkable. ALL must hold:
 
 - [ ] `ls src/bigdataball/__init__.py` exists; all 14 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
 - [ ] `pip install -e .` exits 0.
-- [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
+- [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
 - [ ] `grep -rn "os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
 - [ ] `python -m pytest -q` exits 0 with the same test count as before.
