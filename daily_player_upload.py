@@ -33,7 +33,6 @@ DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 
 # Ensure the processed folder exists
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # Database Configuration
 LOGS_TABLE_NAME = "player_logs"

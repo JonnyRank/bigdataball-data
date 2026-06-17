@@ -41,7 +41,6 @@ DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 
 # Ensure the processed folder exists
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # Database Configuration
 LOGS_TABLE_NAME = "fantasy_logs"
@@ -105,9 +104,6 @@ def main():
     initialize_database()
 
     # --- Pre-load existing logs ---
-    # ... (The rest of your existing code follows here) ...
-
-    # --- Pre-load existing logs ---
     # Try to load the logs that are already in the database.
     # If the table doesn't exist (first run), create an empty DataFrame.
     try:
@@ -150,7 +146,7 @@ def main():
 
     # Initialize ONCE before the loop so keys added per file accumulate across files
     # processed in the same run (prevents re-inserting logs from an earlier file).
-    existing_log_keys = set(existing_logs_df["log_key"])
+    existing_log_keys = set(existing_logs_df["log_key"]) if files_to_process else set()
 
     fantasy_logs_count = 0
     fantasy_logs_overwritten = 0
@@ -327,9 +323,8 @@ def main():
 
     # --- Run the playoffs slate averages pipeline ---
     print("\nStarting slate view update...")
-    unmatched_dk_players = []
     try:
-        unmatched_dk_players = (
+        unmatched_dk_players += (
             export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or []
         )
         print("Playoffs slate view update complete.")
