@@ -297,7 +297,7 @@ branch); replace it there. Do **not** add the fix to `config.py`,
 `Data/` fallback.
 
 **Verify**:
-- `grep -rn "os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` → **no matches** (every occurrence was deepened).
+- `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` → **no matches** (every occurrence was deepened). Note: match the full `PROJECT_ROOT = ...` assignment, not the bare `os.path.dirname(os.path.abspath(__file__))` expression — the latter is a substring of the triple-dirname replacement and would falsely match every fixed line.
 - `grep -rcn "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/ | grep -v ':0$'` → lists exactly nine files.
 
 ### Step 4: Create `pyproject.toml`
