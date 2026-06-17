@@ -1,12 +1,10 @@
 import os
 
-import pandas as pd
-
-from tests.helpers import write_fantasy_xlsx, make_fantasy_rows
+from tests.helpers import write_fantasy_xlsx, make_fantasy_rows, count_rows
 
 
 def _count(engine, table):
-    return len(pd.read_sql_query(f"SELECT * FROM {table}", engine))
+    return count_rows(engine, table)
 
 
 def test_dedup_across_files_in_one_run(fantasy_upload):

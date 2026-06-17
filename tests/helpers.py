@@ -1,6 +1,10 @@
 import pandas as pd
 
 
+def count_rows(engine, table):
+    return len(pd.read_sql_query(f"SELECT * FROM {table}", engine))
+
+
 def write_player_xlsx(path, rows):
     """rows: list of dicts with keys PLAYER_ID, PLAYER, DATE (and optional stats).
     Writes an .xlsx with header on row 0, matching daily_player_upload's read_excel."""

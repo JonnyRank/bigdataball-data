@@ -2,11 +2,11 @@ import os
 
 import pandas as pd
 
-from tests.helpers import write_player_xlsx, make_rows
+from tests.helpers import write_player_xlsx, make_rows, count_rows
 
 
 def _count(engine, table):
-    return len(pd.read_sql_query(f"SELECT * FROM {table}", engine))
+    return count_rows(engine, table)
 
 
 def test_single_file_loads_logs_and_learns_players(player_upload):

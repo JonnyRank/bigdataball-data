@@ -137,12 +137,8 @@ def main():
 
     if not files_to_process:
         print("No new files found to process. Skipping ingestion phase.")
-        # Removed 'return' so the script continues to the pipelines below
-
-    # The loop below handles an empty list automatically (it just won't run),
-    # so you don't need to indent or change the rest of the code!
-
-    print(f"Found {len(files_to_process)} new file(s) to process...")
+    else:
+        print(f"Found {len(files_to_process)} new file(s) to process...")
 
     # Initialize ONCE before the loop so keys added per file accumulate across files
     # processed in the same run (prevents re-inserting logs from an earlier file).
