@@ -185,8 +185,7 @@ def backup_db(conn):
     backup_path = f"{DB_PATH}.bak-{stamp}"
     dest = sqlite3.connect(backup_path)
     try:
-        with dest:
-            conn.backup(dest)
+        conn.backup(dest)  # handles its own locking; no transaction wrapper needed
     finally:
         dest.close()
     print(f"Backed up database to: {backup_path}")
@@ -238,7 +237,13 @@ def main():
             return 0
 
         print("\n--- Removing duplicates ---")
-        backup_db(conn)
+        # The backup is the safety net for this destructive op: if it fails,
+        # abort before deleting anything rather than dumping a raw traceback.
+        try:
+            backup_db(conn)
+        except (sqlite3.Error, OSError) as e:
+            print(f"\nBackup failed ({e}). Aborting without removing any rows.")
+            return 1
         for table in tables:
             remove(conn, table)
 
