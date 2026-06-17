@@ -451,7 +451,7 @@ Machine-checkable. ALL must hold:
 - [ ] `ls src/bigdataball/__init__.py` exists; all 14 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
 - [ ] `pip install -e .` exits 0.
 - [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
-- [ ] `grep -rn "os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback).
+- [ ] `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback — match the full assignment, not the bare expression, which is a substring of the triple-dirname replacement; same form as Step 3's verify).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
 - [ ] `python -m pytest -q` exits 0 with the same test count as before.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
