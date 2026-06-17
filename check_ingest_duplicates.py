@@ -19,12 +19,16 @@ so detection groups on PLAYER_ID, DATE directly.
 
 Usage
 -----
-    python check_ingest_duplicates.py                 # report only (no writes)
-    python check_ingest_duplicates.py --remove        # back up DB, then dedupe
-    python check_ingest_duplicates.py --table player_logs
+Report only (read-only, no writes) -- run this first:
 
-Run the report first; it is read-only. Only `--remove` modifies the database,
-and it always writes a timestamped `.bak-*` copy first.
+    python check_ingest_duplicates.py                      # both tables
+    python check_ingest_duplicates.py --table player_logs  # one table only
+
+Remove duplicates (backs up the DB to a timestamped .bak-* first, then deletes):
+
+    python check_ingest_duplicates.py --remove
+
+Only `--remove` writes to the database; without it the script just reports.
 
 Manual SQL equivalents
 ----------------------

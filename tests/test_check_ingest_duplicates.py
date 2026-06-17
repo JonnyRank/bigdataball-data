@@ -176,3 +176,25 @@ def test_missing_db_returns_nonzero(dedup_tool, monkeypatch):
     assert not os.path.exists(mod.DB_PATH)
     monkeypatch.setattr(sys, "argv", ["check_ingest_duplicates.py"])
     assert mod.main() == 1
+
+
+def test_table_filter_fantasy_logs_in_isolation(dedup_tool, monkeypatch):
+    mod = dedup_tool
+    _seed(mod.DB_PATH, DUP_ROWS, DUP_FANTASY_ROWS)      # both tables dirty
+    monkeypatch.setattr(
+        sys, "argv", ["check_ingest_duplicates.py", "--remove", "--table", "fantasy_logs"]
+    )
+    assert mod.main() == 0
+    assert _count(mod.DB_PATH, "fantasy_logs") == 2     # deduped
+    assert _count(mod.DB_PATH, "player_logs") == 6      # untouched (still has its dups)
+
+
+def test_remove_with_vacuum_succeeds(dedup_tool, monkeypatch):
+    mod = dedup_tool
+    _seed(mod.DB_PATH, DUP_ROWS)
+    # --vacuum exercises the isolation_level toggle; it must not raise OperationalError.
+    monkeypatch.setattr(
+        sys, "argv", ["check_ingest_duplicates.py", "--remove", "--vacuum"]
+    )
+    assert mod.main() == 0
+    assert _count(mod.DB_PATH, "player_logs") == 4      # deduped after VACUUM
