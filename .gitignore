@@ -28,3 +28,4 @@ Python-Bigdataball-Project.code-workspace
 
 # SQL query files unused in scripts
 *.sql
+.devdbrc
