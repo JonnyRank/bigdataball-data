@@ -404,6 +404,25 @@ not change surrounding logic.
 
 **Verify**: `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` → **no matches** (all converted to `python -m bigdataball.`). `python -m pytest -q` still passes.
 
+### Step 10: Wire the editable install into CI
+
+Edit `.github/workflows/test.yml`. In the "Install dependencies" step, add an
+editable install of the package after the requirements install, so CI validates
+`pyproject.toml`:
+
+```yaml
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+```
+
+Leave the rest of the workflow unchanged.
+
+**Verify**: `python -m pytest -q` still passes locally (the CI change itself is
+validated when the workflow runs).
+
 ## Test plan
 
 - **No new tests.** This is a structural move; the existing suite is the
@@ -422,7 +441,7 @@ Machine-checkable. ALL must hold:
 
 - [ ] `ls src/bigdataball/__init__.py` exists; all 14 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
 - [ ] `pip install -e .` exits 0.
-- [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_)" src/bigdataball/` returns no matches (all internal imports relative).
+- [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
 - [ ] `grep -rn "os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
 - [ ] `python -m pytest -q` exits 0 with the same test count as before.
