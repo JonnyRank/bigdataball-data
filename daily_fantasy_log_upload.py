@@ -318,11 +318,13 @@ def main():
         pipeline_errors.append(error_msg)
 
     # --- Run the playoffs slate averages pipeline ---
-    print("\nStarting slate view update...")
+    # The playoffs view is still rebuilt every run, but its unmatched-player result is
+    # intentionally NOT used for the email warning / todo_mappings worklist — that
+    # worklist tracks the regular-season slate. (During the regular season the playoffs
+    # view is empty/stale and would flood the worklist with false positives.)
+    print("\nStarting playoffs slate view update...")
     try:
-        unmatched_dk_players += (
-            export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or []
-        )
+        export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline()
         print("Playoffs slate view update complete.")
     except Exception as e:
         error_msg = f"ERROR in Playoffs Slate View Update: {e}"
