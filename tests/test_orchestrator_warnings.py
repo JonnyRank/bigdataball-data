@@ -1,7 +1,5 @@
 import os
 
-import pytest
-
 
 def test_unmatched_uses_regular_season_not_playoffs(fantasy_upload, monkeypatch):
     """Regression: the email warning and todo_mappings worklist must reflect the
