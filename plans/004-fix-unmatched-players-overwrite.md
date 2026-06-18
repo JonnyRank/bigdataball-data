@@ -297,5 +297,7 @@ Stop and report back (do not improvise) if:
   `fantasy_upload` fixture in `tests/conftest.py`. They serve different purposes —
   `fantasy_upload` is a dedup test fixture; `orchestrator` monkeypatches stages to run
   `main()` end-to-end. If import of `daily_fantasy_log_upload` fails (Google auth libraries
-  not found), add Google auth stubs to `_STATEFUL_MODULES` using the same pattern as
-  `conftest.py`'s `_STUB_MODULES`.
+  not found), define a `_STUB_MODULES` dictionary in `test_orchestrator_warnings.py`
+  and inject the stubs before calling `import_module`, using the same pattern as
+  `conftest.py`'s `_STUB_MODULES`. Note: `_STATEFUL_MODULES` is a list for
+  `sys.modules.pop()` reloading only — stubs cannot be added there.
