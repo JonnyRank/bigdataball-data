@@ -195,7 +195,7 @@ unchanged — only the import line changes, never the call sites.
 
 ## Git workflow
 
-- You are on branch `claude/quirky-meitner-jdojfx` — stay on it.
+- Create a new branch for this work (e.g. `claude/src-layout`) and stay on it.
 - Use `git mv` (not plain `mv`) so history follows the files.
 - Commit in logical units (e.g. one commit for the move + imports, one for
   packaging/test wiring, one for docs). Match the repo's plain, imperative
@@ -370,7 +370,7 @@ Prefix them all with `bigdataball.`:
 *`fantasy_upload` fixture:*
 - In `_FANTASY_DEPS`, prefix every bare module name with `bigdataball.`:
   `"daily_fantasy_log_upload"` → `"bigdataball.daily_fantasy_log_upload"`, and the same for all other entries in that list.
-- In `_STUB_MODULES`, rename the `"drive_ingestion"` key to `"bigdataball.drive_ingestion"`. (Relative imports inside the package resolve to `bigdataball.*` in `sys.modules`; a stub keyed on `"drive_ingestion"` would be missed.)
+- In `_STUB_MODULES`, rename the `"drive_ingestion"` key to `"bigdataball.drive_ingestion"`. (Relative imports inside the package resolve to `bigdataball.*` in `sys.modules`; a stub keyed on `"drive_ingestion"` would be missed.) The other entries in `_STUB_MODULES` — `"googleapiclient"`, `"google"`, `"google.oauth2"`, `"google_auth_oauthlib"`, etc. — are **external** packages that do not move into the `bigdataball` namespace; leave those keys unchanged.
 - `importlib.import_module("daily_fantasy_log_upload")` → `importlib.import_module("bigdataball.daily_fantasy_log_upload")`
 
 **`tests/test_check_ingest_duplicates.py`:**
