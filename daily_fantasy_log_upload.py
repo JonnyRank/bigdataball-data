@@ -41,7 +41,6 @@ DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 
 # Ensure the processed folder exists
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 # Database Configuration
 LOGS_TABLE_NAME = "fantasy_logs"
@@ -105,9 +104,6 @@ def main():
     initialize_database()
 
     # --- Pre-load existing logs ---
-    # ... (The rest of your existing code follows here) ...
-
-    # --- Pre-load existing logs ---
     # Try to load the logs that are already in the database.
     # If the table doesn't exist (first run), create an empty DataFrame.
     try:
@@ -141,12 +137,12 @@ def main():
 
     if not files_to_process:
         print("No new files found to process. Skipping ingestion phase.")
-        # Removed 'return' so the script continues to the pipelines below
+    else:
+        print(f"Found {len(files_to_process)} new file(s) to process...")
 
-    # The loop below handles an empty list automatically (it just won't run),
-    # so you don't need to indent or change the rest of the code!
-
-    print(f"Found {len(files_to_process)} new file(s) to process...")
+    # Initialize ONCE before the loop so keys added per file accumulate across files
+    # processed in the same run (prevents re-inserting logs from an earlier file).
+    existing_log_keys = set(existing_logs_df["log_key"]) if files_to_process else set()
 
     fantasy_logs_count = 0
     fantasy_logs_overwritten = 0
@@ -223,8 +219,6 @@ def main():
                 cleaned_data["PLAYER_ID"].astype(str) + "_" + cleaned_data["DATE"]
             )
 
-            existing_log_keys = set(existing_logs_df["log_key"])
-
             # Filter for rows that are not already in the database
             truly_new_logs_df = cleaned_data[
                 ~cleaned_data["log_key"].isin(existing_log_keys)
@@ -253,7 +247,7 @@ def main():
                     )
                     truly_new_players_df_renamed = truly_new_players_df_for_dim.rename(
                         columns={"PLAYER": "PLAYER_NAME"}
-                    ).rename(columns={"PLAYER_ID": "PLAYER_ID"})
+                    )
                     truly_new_players_df_renamed.to_sql(
                         PLAYERS_TABLE_NAME, con=engine, if_exists="append", index=False
                     )
@@ -325,9 +319,8 @@ def main():
 
     # --- Run the playoffs slate averages pipeline ---
     print("\nStarting slate view update...")
-    unmatched_dk_players = []
     try:
-        unmatched_dk_players = (
+        unmatched_dk_players += (
             export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or []
         )
         print("Playoffs slate view update complete.")
