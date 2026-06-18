@@ -6,12 +6,10 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 5576703..HEAD -- daily_fantasy_log_upload.py`
-> Plans 002 and 003 also modify this file (the path block near the top and the dedup
-> loop in the middle). This plan only changes the slate-pipeline section near the
-> bottom (the playoffs block around lines 323-334). Compare the "Current state"
-> excerpt against the live code; on a mismatch in that block, treat it as a STOP
-> condition.
+> **Drift check (run first)**: `git diff --stat 8bf4ce0..HEAD -- daily_fantasy_log_upload.py`
+> Plans 002 and 003 have already been applied. This plan only changes the playoffs
+> slate block (lines ~320-330 as of 8bf4ce0). Compare the "Current state" excerpt
+> against the live code; on a mismatch in that block, treat it as a STOP condition.
 
 ## Status
 
@@ -20,7 +18,7 @@
 - **Risk**: LOW
 - **Depends on**: 002 (test harness). Recommended after 003 (same file), but independent.
 - **Category**: bug
-- **Planned at**: commit `5576703`, 2026-06-16
+- **Planned at**: commit `8bf4ce0`, 2026-06-18 (refreshed; original `5576703` 2026-06-16)
 
 ## Why this matters
 
@@ -37,9 +35,16 @@ the real unmatched players.
 **regular-season** slate only. The playoffs view is still rebuilt every run, but its
 unmatched-player result is intentionally **not** used for the worklist.
 
-## Current state
+## Current state (refreshed at 8bf4ce0, 2026-06-18)
 
-`daily_fantasy_log_upload.py`, the slate-pipeline section (lines ~310-334):
+Plans 002 and 003 have been applied. The original bug (a `= []` reset followed by
+overwriting `unmatched_dk_players` with the playoffs return value) was partially fixed
+in commit `f6d787f`: the `= []` reset is gone, and the playoffs block now uses `+=`
+to *append* playoffs results to the regular-season list. The worklist is no longer
+purely the playoffs results, but it still includes them — violating the "regular-season
+only" intent.
+
+`daily_fantasy_log_upload.py`, the slate-pipeline section (lines ~307-330 as of HEAD):
 
 ```python
     # --- Run the slate averages pipeline ---
@@ -56,10 +61,9 @@ unmatched-player result is intentionally **not** used for the worklist.
         pipeline_errors.append(error_msg)
 
     # --- Run the playoffs slate averages pipeline ---
-    print("\nStarting slate view update...")
-    unmatched_dk_players = []
+    print("\nStarting slate view update...")          # <-- still says regular-season
     try:
-        unmatched_dk_players = (
+        unmatched_dk_players += (                    # <-- this is the remaining bug
             export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or []
         )
         print("Playoffs slate view update complete.")
@@ -69,23 +73,25 @@ unmatched-player result is intentionally **not** used for the worklist.
         pipeline_errors.append(error_msg)
 ```
 
-The two bug lines are `unmatched_dk_players = []` and the assignment from
-`run_playoffs_slate_averages_pipeline()` in the second block. Downstream (lines ~366-392),
-`unmatched_dk_players` is what gets written to `todo_mappings.txt` and appended to the
-success email body.
+The remaining fix is **two lines**: replace `unmatched_dk_players += (...)` with a bare
+call (discarding the return value), and fix the duplicate `print` message. Downstream code
+(lines ~362-384) that writes to `todo_mappings.txt` and the email body does not change.
 
 `run_slate_averages_pipeline()` returns a list of strings; `run_playoffs_slate_averages_pipeline()`
 also returns a list. The orchestrator imports both modules at the top
 (`import export_slate_averages_vw`, `import export_playoffs_slate_averages_vw`).
 
+`tests/test_orchestrator_warnings.py` does **not** yet exist — the regression test was
+not written as part of the partial fix.
+
 ## The fix
 
-Keep the regular-season block exactly as is. In the **playoffs** block: remove the
-`unmatched_dk_players = []` reset and stop assigning the playoffs return value to
-`unmatched_dk_players` — call the playoffs pipeline for its side effect (rebuilding the
-view) but discard its return for worklist purposes.
+The regular-season block is correct as-is. In the **playoffs** block: replace the
+`unmatched_dk_players +=` line with a bare call that discards the return value, and fix
+the duplicate `print` message (it still says "Starting slate view update..." — it should
+say "playoffs").
 
-Target shape for the playoffs block:
+Target shape for the playoffs block (two lines change from the current state):
 ```python
     # --- Run the playoffs slate averages pipeline ---
     # The playoffs view is still rebuilt every run, but its unmatched-player result is
@@ -134,16 +140,21 @@ Target shape for the playoffs block:
 
 ### Step 1: Edit the playoffs slate block
 
-Replace the playoffs block (the second of the two blocks in "Current state") with the
-"Target shape" above. Do not modify the regular-season block.
+In the playoffs block (the second `try:` block, currently containing `unmatched_dk_players +=`):
+
+1. Change `print("\nStarting slate view update...")` to `print("\nStarting playoffs slate view update...")`.
+2. Replace `unmatched_dk_players += (export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline() or [])` with a bare call `export_playoffs_slate_averages_vw.run_playoffs_slate_averages_pipeline()`.
+
+The resulting block must match the "Target shape" above. Do not modify the regular-season block.
 
 **Verify**:
 - `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
 - `grep -c "unmatched_dk_players = \[\]" daily_fantasy_log_upload.py` → `1`
   (only the regular-season initializer remains).
-- `grep -c "unmatched_dk_players =" daily_fantasy_log_upload.py` → `2`
-  (the `= []` init and the `= (... run_slate_averages_pipeline() ...)` assignment;
-  the playoffs assignment is gone).
+- `grep -c "unmatched_dk_players" daily_fantasy_log_upload.py` → matches in the
+  regular-season block only; no match inside the playoffs `try:` block.
+- `grep -c "Starting slate view update" daily_fantasy_log_upload.py` → `1`
+  (the playoffs print now says "playoffs"; the duplicate message is fixed).
 
 ### Step 2: Write the regression test
 
@@ -266,7 +277,7 @@ ALL must hold:
 
 Stop and report back (do not improvise) if:
 
-- The drift check shows the slate-pipeline section already restructured since `5576703`.
+- The drift check shows the slate-pipeline section already restructured since `8bf4ce0`.
 - `main()` in the test raises before reaching the warning code (e.g. a stage you didn't
   stub does real I/O) — report which stage; you may need to stub it too, but do not
   change `main()`'s control flow to make the test pass.
@@ -280,4 +291,13 @@ Stop and report back (do not improvise) if:
 - If a future change makes the playoffs worklist meaningful (e.g. a separate playoffs
   `todo` file), revisit this decision — it was deliberately scoped to regular-season only.
 - The duplicated `print("\nStarting slate view update...")` is corrected to mention
-  "playoffs"; keep the messages distinct so logs are readable.
+  "playoffs" in Step 1; keep the messages distinct so logs are readable.
+- **`orchestrator` fixture vs `fantasy_upload`**: the `orchestrator` fixture in
+  `tests/test_orchestrator_warnings.py` (Step 2) is a separate fixture from the
+  `fantasy_upload` fixture in `tests/conftest.py`. They serve different purposes —
+  `fantasy_upload` is a dedup test fixture; `orchestrator` monkeypatches stages to run
+  `main()` end-to-end. If import of `daily_fantasy_log_upload` fails (Google auth libraries
+  not found), define a `_STUB_MODULES` dictionary in `test_orchestrator_warnings.py`
+  and inject the stubs before calling `import_module`, using the same pattern as
+  `conftest.py`'s `_STUB_MODULES`. Note: `_STATEFUL_MODULES` is a list for
+  `sys.modules.pop()` reloading only — stubs cannot be added there.
