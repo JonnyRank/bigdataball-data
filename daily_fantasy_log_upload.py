@@ -371,7 +371,7 @@ def main():
                 needs_newline = (
                     os.path.exists(todo_path) and os.path.getsize(todo_path) > 0
                 )
-                with open(todo_path, "a") as f:
+                with open(todo_path, "a", encoding="utf-8") as f:
                     if needs_newline:
                         f.write("\n")
                     f.write(f"--- Unmatched Players: {date_str} ---\n")
