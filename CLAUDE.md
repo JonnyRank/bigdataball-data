@@ -53,12 +53,13 @@ The riskiest files to change: `daily_fantasy_log_upload.py` (orchestrator + inli
 - **Duplicate log rows inflate every average.** After `check_ingest_duplicates.py --remove`, re-run `create_summary_tables.py` and the slate exports.
 - **Google Drive auth is interactive** — first run opens a browser; headless runs require a pre-existing valid `token.json`.
 - **Path resolution is inconsistent across scripts** — match the idiom already in the file you're editing (see `docs/codebase/ARCHITECTURE.md`).
+- **The DB is not committed** — running any pipeline stage requires either the `G:` mount or a local `Data/` dir populated with source `.xlsx` files.
 
 ## Testing And Verification
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                      # full suite (13 tests)
+python -m pytest -q                      # full suite
 ```
 
 CI runs `pytest -q` on every push/PR. See `docs/codebase/TESTING.md` for coverage details and gaps. Untested scripts (`daily_fantasy_log_upload.py`, summary, exports) are best verified by reading console output and inspecting the DB directly.
