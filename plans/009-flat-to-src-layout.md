@@ -8,7 +8,7 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat a91aac1..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
+> `git diff --stat 8bf4ce0..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
 > If any of the listed `.py` files, `pytest.ini`, or the workflow changed
 > since this plan was written, compare the "Current state" excerpts against
 > the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -20,7 +20,7 @@
 - **Risk**: MED
 - **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of plans 003–008)
 - **Category**: tech-debt
-- **Planned at**: commit `a91aac1`, 2026-06-17
+- **Planned at**: commit `8bf4ce0`, 2026-06-18 (refreshed; original `a91aac1` 2026-06-17)
 
 ## Why this matters
 
@@ -113,16 +113,28 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 `config`, so **neither needs the path fix** — only the import fix.
 `auth_manager.py` and `email_notifier.py` have no path logic either.
 
-**Test harness** (current):
+**Test harness** (current, as of 8bf4ce0):
 - `pytest.ini`: `pythonpath = .` and `testpaths = tests`.
-- `tests/conftest.py:19-20` and `:27` reference the module by bare name
-  `"daily_player_upload"` (in `sys.modules.pop(...)` and
-  `importlib.import_module(...)`).
-- `tests/test_check_ingest_duplicates.py:17-18` (and the symmetric teardown)
-  reference `"check_ingest_duplicates"` the same way.
-- `tests/test_daily_player_upload.py:5` does `from tests.helpers import ...`
-  (a `tests.` import — stays valid, see Step 6).
+- `tests/conftest.py` now has **two** fixtures with module-name references:
+  - `fantasy_upload` fixture (added in commit `f6d787f`): has a `_FANTASY_DEPS`
+    list of bare module names plus an `importlib.import_module("daily_fantasy_log_upload")`
+    call. All entries in `_FANTASY_DEPS` and the `import_module` call need the
+    `bigdataball.` prefix. A `_STUB_MODULES` dict stubs `"drive_ingestion"` by key —
+    after the move, the stub key must become `"bigdataball.drive_ingestion"` because
+    relative imports inside the package resolve to the package namespace.
+  - `player_upload` fixture: `sys.modules.pop("daily_player_upload", None)` (two
+    occurrences) and `importlib.import_module("daily_player_upload")` — these also
+    need the `bigdataball.` prefix.
+- `tests/test_check_ingest_duplicates.py`: references `"check_ingest_duplicates"` via
+  `sys.modules.pop` and `import_module` — needs `bigdataball.` prefix.
+- `tests/test_daily_fantasy_log_upload.py` (added in `f6d787f`): uses the
+  `fantasy_upload` fixture via pytest injection — **no direct `import_module` calls,
+  no changes needed**.
+- `tests/test_daily_player_upload.py`: `from tests.helpers import ...` (a `tests.`
+  import — stays valid, see Step 6). No `import_module` calls.
 - `tests/helpers.py`, `tests/__init__.py` need no changes.
+- **Total test count is 15** (10 check_ingest + 4 player_upload + 1 fantasy_upload).
+  Plan 009 adds no tests and removes none; the executor should see 15 pass after the move.
 
 **CI**: `.github/workflows/test.yml` installs
 `pip install -r requirements.txt -r requirements-dev.txt` then runs
@@ -346,23 +358,31 @@ fixed in Step 6).
 
 ### Step 6: Update the test module references to the package namespace
 
-Two test files reference modules by bare name through `importlib`/`sys.modules`.
-Prefix them with `bigdataball.`:
+Three test artifacts reference modules by bare name through `importlib`/`sys.modules`.
+Prefix them all with `bigdataball.`:
 
-- `tests/conftest.py`:
-  - `sys.modules.pop("daily_player_upload", None)` → `sys.modules.pop("bigdataball.daily_player_upload", None)` (**two** occurrences — the pop before `import_module` and the pop in the teardown after `yield`)
-  - `importlib.import_module("daily_player_upload")` → `importlib.import_module("bigdataball.daily_player_upload")`
-- `tests/test_check_ingest_duplicates.py`:
-  - `sys.modules.pop("check_ingest_duplicates", None)` → `sys.modules.pop("bigdataball.check_ingest_duplicates", None)` (**both** occurrences)
-  - `importlib.import_module("check_ingest_duplicates")` → `importlib.import_module("bigdataball.check_ingest_duplicates")`
+**`tests/conftest.py`** has two fixtures to update:
+
+*`player_upload` fixture:*
+- `sys.modules.pop("daily_player_upload", None)` → `sys.modules.pop("bigdataball.daily_player_upload", None)` (**two** occurrences — before `import_module` and in teardown)
+- `importlib.import_module("daily_player_upload")` → `importlib.import_module("bigdataball.daily_player_upload")`
+
+*`fantasy_upload` fixture:*
+- In `_FANTASY_DEPS`, prefix every bare module name with `bigdataball.`:
+  `"daily_fantasy_log_upload"` → `"bigdataball.daily_fantasy_log_upload"`, and the same for all other entries in that list.
+- In `_STUB_MODULES`, rename the `"drive_ingestion"` key to `"bigdataball.drive_ingestion"`. (Relative imports inside the package resolve to `bigdataball.*` in `sys.modules`; a stub keyed on `"drive_ingestion"` would be missed.)
+- `importlib.import_module("daily_fantasy_log_upload")` → `importlib.import_module("bigdataball.daily_fantasy_log_upload")`
+
+**`tests/test_check_ingest_duplicates.py`:**
+- `sys.modules.pop("check_ingest_duplicates", None)` → `sys.modules.pop("bigdataball.check_ingest_duplicates", None)` (**both** occurrences)
+- `importlib.import_module("check_ingest_duplicates")` → `importlib.import_module("bigdataball.check_ingest_duplicates")`
 
 Do **not** change the `sys.argv = ["check_ingest_duplicates.py", ...]` lines —
-those are just the simulated program name (`argv[0]`) and have no import meaning.
-Do **not** change `tests/test_daily_player_upload.py` (it imports the module only
-through the `player_upload` fixture and via `from tests.helpers`, both already
-correct).
+those are the simulated program name (`argv[0]`) and have no import meaning.
+Do **not** change `tests/test_daily_player_upload.py` or `tests/test_daily_fantasy_log_upload.py` — they use fixtures via injection and `from tests.helpers`, which remain valid.
 
-**Verify**: `grep -rn "import_module(\"daily_player_upload\")\|import_module(\"check_ingest_duplicates\")" tests/` → **no matches** (both now carry the `bigdataball.` prefix).
+**Verify**: `grep -rn "import_module(\"daily_player_upload\")\|import_module(\"daily_fantasy_log_upload\")\|import_module(\"check_ingest_duplicates\")" tests/` → **no matches** (all now carry the `bigdataball.` prefix).
+Also: `grep -n '"drive_ingestion"' tests/conftest.py` → **no matches** (key renamed to `"bigdataball.drive_ingestion"`).
 
 ### Step 7: Import smoke test (all 14 modules)
 
@@ -384,10 +404,11 @@ fix it and re-run.
 
 ### Step 8: Run the full test suite
 
-**Verify**: `python -m pytest -q` → all tests pass, exit 0, with the **same
-test count** as before this plan (this plan adds no tests and removes none). If
-any test errors with a `ModuleNotFoundError` for `bigdataball.*` or `tests.*`,
-re-check Steps 5–6.
+**Verify**: `python -m pytest -q` → all **15 tests** pass, exit 0 (10
+`test_check_ingest_duplicates`, 4 `test_daily_player_upload`, 1
+`test_daily_fantasy_log_upload`). This plan adds no tests and removes none — if
+the count differs, something was moved or shadowed. If any test errors with a
+`ModuleNotFoundError` for `bigdataball.*` or `tests.*`, re-check Steps 5–6.
 
 ### Step 9: Update the runnable-command docs
 
@@ -453,7 +474,7 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
 - [ ] `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback — match the full assignment, not the bare expression, which is a substring of the triple-dirname replacement; same form as Step 3's verify).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
-- [ ] `python -m pytest -q` exits 0 with the same test count as before.
+- [ ] `python -m pytest -q` exits 0 with exactly 15 tests passing.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
 - [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
@@ -464,7 +485,7 @@ Machine-checkable. ALL must hold:
 Stop and report back (do not improvise) if:
 
 - The drift check shows any in-scope `.py` file, `pytest.ini`, or the workflow
-  changed since commit `a91aac1`, and the "Current state" excerpts no longer
+  changed since commit `8bf4ce0`, and the "Current state" excerpts no longer
   match the live code.
 - After Step 2/3, the import smoke test (Step 7) still raises an import error you
   cannot trace to a missed relative-import or a missed `PROJECT_ROOT` line — the
