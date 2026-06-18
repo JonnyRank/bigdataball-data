@@ -68,11 +68,15 @@ jobs:
             --max-turns 10
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
 
-  respond-to-comment:
+  review-on-comment:
     if: |
       github.event_name == 'issue_comment' &&
-      contains(github.event.comment.body, '@claude') &&
-      github.event.issue.pull_request != null
+      contains(github.event.comment.body, '@claude full review') &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == github.repository_owner
+    concurrency:
+      group: claude-respond-${{ github.event.issue.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -85,7 +89,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Respond to Claude Mention
+      - name: Full Review on Comment
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -127,6 +131,49 @@ jobs:
 
             Provide detailed feedback using inline comments for specific issues.
             Use top-level comments for general observations or praise.
+
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 10
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+  respond-to-comment:
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@claude') &&
+      !contains(github.event.comment.body, '@claude full review') &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == github.repository_owner
+    concurrency:
+      group: claude-respond-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Respond to Comment
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          track_progress: true
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.issue.number }}
+            USER COMMENT: ${{ github.event.comment.body }}
+
+            Respond to the user's comment above. If they asked a question, answer it.
+            If they requested a specific analysis or action, perform it.
+            Use top-level PR comments to communicate your response.
 
           claude_args: |
             --model claude-sonnet-4-6
