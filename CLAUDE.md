@@ -25,7 +25,7 @@ pip install -r requirements.txt          # install deps
 python daily_fantasy_log_upload.py       # MAIN orchestrator — runs the full pipeline
 ```
 
-`daily_fantasy_log_upload.py` is the whole-pipeline orchestrator despite its name. Individual stages can be run standalone:
+`daily_fantasy_log_upload.py` is the whole-pipeline orchestrator despite its name. Requires a `.env` file with Drive/email credentials — see `docs/codebase/INTEGRATIONS.md`. Individual stages can be run standalone:
 
 ```bash
 python drive_ingestion.py            # download latest .xlsx from Google Drive
