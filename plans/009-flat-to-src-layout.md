@@ -8,7 +8,7 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 8bf4ce0..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
+> `git diff --stat 198d5b9..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
 > If any of the listed `.py` files, `pytest.ini`, or the workflow changed
 > since this plan was written, compare the "Current state" excerpts against
 > the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -20,7 +20,7 @@
 - **Risk**: MED
 - **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of plans 003–008)
 - **Category**: tech-debt
-- **Planned at**: commit `8bf4ce0`, 2026-06-18 (refreshed; original `a91aac1` 2026-06-17)
+- **Planned at**: commit `8bf4ce0`, 2026-06-18 (refreshed again at `198d5b9`, 2026-06-20 for plan 004's merge; original `a91aac1` 2026-06-17). Import-graph excerpts and the `PROJECT_ROOT` line re-verified unchanged at HEAD; plan 004 added `tests/test_orchestrator_warnings.py` (handled below) and only touched `daily_fantasy_log_upload.py`'s `main()` section, not the imports.
 
 ## Why this matters
 
@@ -132,9 +132,14 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
   no changes needed**.
 - `tests/test_daily_player_upload.py`: `from tests.helpers import ...` (a `tests.`
   import — stays valid, see Step 6). No `import_module` calls.
+- `tests/test_orchestrator_warnings.py` (added in plan 004's merge `f236ef5`): uses the
+  `fantasy_upload` fixture via pytest injection and references submodules as attributes of
+  the loaded module (`mod.daily_player_upload`, etc.) — **no direct `import_module` calls,
+  no bare module-name strings, no changes needed**.
 - `tests/helpers.py`, `tests/__init__.py` need no changes.
-- **Total test count is 15** (10 check_ingest + 4 player_upload + 1 fantasy_upload).
-  Plan 009 adds no tests and removes none; the executor should see 15 pass after the move.
+- **Total test count is 16** (10 check_ingest + 4 player_upload + 1 fantasy_upload +
+  1 orchestrator_warnings). Plan 009 adds no tests and removes none; the executor should
+  see 16 pass after the move.
 
 **CI**: `.github/workflows/test.yml` installs
 `pip install -r requirements.txt -r requirements-dev.txt` then runs
@@ -404,9 +409,9 @@ fix it and re-run.
 
 ### Step 8: Run the full test suite
 
-**Verify**: `python -m pytest -q` → all **15 tests** pass, exit 0 (10
+**Verify**: `python -m pytest -q` → all **16 tests** pass, exit 0 (10
 `test_check_ingest_duplicates`, 4 `test_daily_player_upload`, 1
-`test_daily_fantasy_log_upload`). This plan adds no tests and removes none — if
+`test_daily_fantasy_log_upload`, 1 `test_orchestrator_warnings`). This plan adds no tests and removes none — if
 the count differs, something was moved or shadowed. If any test errors with a
 `ModuleNotFoundError` for `bigdataball.*` or `tests.*`, re-check Steps 5–6.
 
@@ -474,7 +479,7 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
 - [ ] `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback — match the full assignment, not the bare expression, which is a substring of the triple-dirname replacement; same form as Step 3's verify).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
-- [ ] `python -m pytest -q` exits 0 with exactly 15 tests passing.
+- [ ] `python -m pytest -q` exits 0 with exactly 16 tests passing.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
 - [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
