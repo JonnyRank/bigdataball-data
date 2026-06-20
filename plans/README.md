@@ -15,7 +15,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | DONE (re-verified 2026-06-20: 16 tests pass) | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
 | 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | DONE (re-verified 2026-06-20: regression test green) | [#6](https://github.com/JonnyRank/bigdataball-data/issues/6) |
 | 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | DONE (re-verified 2026-06-20: `test_orchestrator_warnings` green) | [#7](https://github.com/JonnyRank/bigdataball-data/issues/7) |
-| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO (re-baselined @ `198d5b9`; excerpts verified accurate) | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
+| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | DONE (18 tests pass @ `3125b99`; 9 scripts + `paths.py` + `tests/test_paths.py`) | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
 | 006  | Extract triplicated DraftKings load + fuzzy-match logic | P2 | M | 002 (005 recommended) | TODO (no drift) | [#9](https://github.com/JonnyRank/bigdataball-data/issues/9) |
 | 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | TODO (no drift) | [#10](https://github.com/JonnyRank/bigdataball-data/issues/10) |
 | 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (recommended) | TODO (no drift) | [#11](https://github.com/JonnyRank/bigdataball-data/issues/11) |
