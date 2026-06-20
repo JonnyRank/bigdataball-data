@@ -11,15 +11,15 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 
 | Plan | Title | Priority | Effort | Depends on | Status | Issue |
 |------|-------|----------|--------|------------|--------|-------|
-| 001  | Re-encode `requirements.txt` as UTF-8 | P1 | S | — | DONE (verified 2026-06-18) | [#4](https://github.com/JonnyRank/bigdataball-data/issues/4) |
-| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | DONE (verified 2026-06-18) | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
-| 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | DONE (verified 2026-06-18) | [#6](https://github.com/JonnyRank/bigdataball-data/issues/6) |
-| 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | DONE (verified 2026-06-18) | [#7](https://github.com/JonnyRank/bigdataball-data/issues/7) |
-| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO (no drift) | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
+| 001  | Re-encode `requirements.txt` as UTF-8 | P1 | S | — | DONE (re-verified 2026-06-20 @ `198d5b9`: ASCII) | [#4](https://github.com/JonnyRank/bigdataball-data/issues/4) |
+| 002  | Establish pytest verification baseline + integration harness | P1 | M | 001 (recommended) | DONE (re-verified 2026-06-20: 16 tests pass) | [#5](https://github.com/JonnyRank/bigdataball-data/issues/5) |
+| 003  | Fix duplicate-log inserts across files in one run | P1 | S | 002 | DONE (re-verified 2026-06-20: regression test green) | [#6](https://github.com/JonnyRank/bigdataball-data/issues/6) |
+| 004  | Preserve regular-season unmatched-players worklist | P1 | S | 002 (003 recommended) | DONE (re-verified 2026-06-20: `test_orchestrator_warnings` green) | [#7](https://github.com/JonnyRank/bigdataball-data/issues/7) |
+| 005  | Centralize data-path resolution into a `paths` module | P2 | M | 002 | TODO (re-baselined @ `198d5b9`; excerpts verified accurate) | [#8](https://github.com/JonnyRank/bigdataball-data/issues/8) |
 | 006  | Extract triplicated DraftKings load + fuzzy-match logic | P2 | M | 002 (005 recommended) | TODO (no drift) | [#9](https://github.com/JonnyRank/bigdataball-data/issues/9) |
 | 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | TODO (no drift) | [#10](https://github.com/JonnyRank/bigdataball-data/issues/10) |
 | 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (recommended) | TODO (no drift) | [#11](https://github.com/JonnyRank/bigdataball-data/issues/11) |
-| 009  | Convert flat layout to a `src/bigdataball/` package | P2 | M | none (rebases paths of 003–008) | TODO (drifted — see plan file; conftest.py grew a `fantasy_upload` fixture) | — |
+| 009  | Convert flat layout to a `src/bigdataball/` package | P2 | M | none (rebases paths of 003–008) | TODO (refreshed @ `198d5b9`: added `test_orchestrator_warnings.py`, count 15→16) | — |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

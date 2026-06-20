@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 5576703..HEAD -- daily_player_upload.py daily_fantasy_log_upload.py create_summary_tables.py export_slate_averages_vw.py export_playoffs_slate_averages_vw.py export_slate_averages_csv.py run_db_patch.py verify_db_patch.py`
+> **Drift check (run first)**: `git diff --stat 198d5b9..HEAD -- daily_player_upload.py daily_fantasy_log_upload.py create_summary_tables.py export_slate_averages_vw.py export_playoffs_slate_averages_vw.py export_slate_averages_csv.py run_db_patch.py verify_db_patch.py`
 > Plans 002–004 modify the two upload scripts; this plan replaces the path block in all
 > eight files. Compare the "Current state" excerpts against the live code before
 > editing each file; on a mismatch in the path block, treat it as a STOP condition.
@@ -18,7 +18,7 @@
 - **Risk**: MED
 - **Depends on**: 002 (pytest harness; this plan supersedes the inline env-var branch 002 added to the two upload scripts)
 - **Category**: tech-debt
-- **Planned at**: commit `5576703`, 2026-06-16
+- **Planned at**: commit `5576703`, 2026-06-16 (excerpts re-verified at `198d5b9`, 2026-06-20: the two upload-script blocks at `daily_player_upload.py:16-27` and `daily_fantasy_log_upload.py:24-35` are unchanged; plans 003/004 only touched unrelated sections)
 
 ## Why this matters
 
