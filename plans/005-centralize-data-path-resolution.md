@@ -52,6 +52,7 @@ some lines):
 - `export_slate_averages_csv.py:23-27` — inside `run_slate_averages_smart_export()`.
 - `run_db_patch.py:6-13`
 - `verify_db_patch.py:6-11`
+- `check_ingest_duplicates.py:82-91` — has the full three-branch block (already includes the `BIGDATABALL_DATA_DIR` override from plan 002); `PROJECT_ROOT` is used only inside this block and can be removed; derives only `DB_PATH` from `BASE_DATA_PATH`.
 
 All derive further paths from `BASE_DATA_PATH` (e.g. `DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")`).
 Those derived lines stay; only the resolution of `BASE_DATA_PATH` is centralized.
@@ -71,12 +72,13 @@ reload picks up the env var.
 
 ## Scope
 
-**In scope** (create one, modify eight):
+**In scope** (create one, modify nine):
 - `paths.py` (create)
 - `daily_player_upload.py`, `daily_fantasy_log_upload.py`, `create_summary_tables.py`,
   `export_slate_averages_vw.py`, `export_playoffs_slate_averages_vw.py`,
-  `export_slate_averages_csv.py`, `run_db_patch.py`, `verify_db_patch.py` — replace the
-  path-resolution block with a call to `paths.resolve_base_data_path()`.
+  `export_slate_averages_csv.py`, `run_db_patch.py`, `verify_db_patch.py`,
+  `check_ingest_duplicates.py` — replace the path-resolution block with a call to
+  `paths.resolve_base_data_path()`.
 - `tests/test_paths.py` (create)
 
 **Out of scope** (do NOT touch):
@@ -128,7 +130,7 @@ the fallback is unchanged from the inline versions.
 
 ### Step 2: Replace the block in each script
 
-In each of the eight files, replace the path-resolution block with:
+In each of the nine files, replace the path-resolution block with:
 ```python
 import paths
 ...
@@ -143,7 +145,7 @@ For the three export scripts the block is inside a function — set
 
 Do this one file at a time and run `python3 -m py_compile <file>` after each.
 
-**Verify** (after all eight):
+**Verify** (after all nine):
 - `python3 -m py_compile *.py` → exit 0.
 - `grep -rn 'os.path.exists(r"G:\\My Drive")' *.py` → matches only in `paths.py`
   (one occurrence). No script still contains the inline `G:\My Drive` check.
@@ -195,7 +197,7 @@ ALL must hold:
 - [ ] `grep -rn 'G:\\My Drive' *.py` returns matches only in `paths.py`.
 - [ ] `python3 -m py_compile *.py` exits 0.
 - [ ] `python3 -m pytest -q` exits 0; all prior tests plus `tests/test_paths.py` pass.
-- [ ] `git status` shows only the in-scope files changed/created.
+- [ ] `git status` shows only the in-scope files changed/created (9 scripts + `paths.py` + `tests/test_paths.py`).
 - [ ] `plans/README.md` status row for 005 updated.
 
 ## STOP conditions
@@ -206,8 +208,9 @@ Stop and report back (do not improvise) if:
   remove it — keep `PROJECT_ROOT` in that file instead and report.
 - A reloaded upload-script test (002–004) fails after the refactor — the reload no
   longer recomputes `BASE_DATA_PATH`; do not paper over it, report the failure.
-- You find a ninth file with the same block not listed here — report it; don't expand
-  scope silently.
+- You find a tenth file with the same block not listed here — report it; don't expand
+  scope silently. (Note: `check_ingest_duplicates.py` is now listed in scope; `config.py`
+  is explicitly excluded below.)
 
 ## Maintenance notes
 
