@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 import os
 from datetime import datetime
 import mappings
+import paths
 from thefuzz import process
 
 
@@ -20,11 +21,7 @@ def run_slate_averages_smart_export():
     print("--- Starting Smart Slate Averages Export ---")
 
     # --- 1. Setup Paths ---
-    if os.path.exists(r"G:\My Drive"):
-        BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
-    else:
-        PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-        BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+    BASE_DATA_PATH = paths.resolve_base_data_path()
 
     DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
     CSV_EXPORT_DIR = os.path.join(BASE_DATA_PATH, "csv_exports")

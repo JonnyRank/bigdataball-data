@@ -1,14 +1,10 @@
 import sqlite3
 import os
 import mappings
+import paths
 
 # --- Configuration ---
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-if os.path.exists(r"G:\My Drive"):
-    BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
-else:
-    BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+BASE_DATA_PATH = paths.resolve_base_data_path()
 
 DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 

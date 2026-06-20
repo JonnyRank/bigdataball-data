@@ -11,20 +11,10 @@ from sqlalchemy import create_engine, text
 import glob
 import os
 import mappings
+import paths
 
 # --- 1. Configuration ---
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-# HARDCODED PATHS FOR MIGRATION
-# An explicit override (used by tests and for local runs) wins; otherwise
-# use the Google Drive (G:) mount, else fall back to a local Data/ folder.
-if os.environ.get("BIGDATABALL_DATA_DIR"):
-    BASE_DATA_PATH = os.environ["BIGDATABALL_DATA_DIR"]
-elif os.path.exists(r"G:\My Drive"):
-    BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
-else:
-    # Fallback for non-synced machines
-    BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+BASE_DATA_PATH = paths.resolve_base_data_path()
 
 # Define specific paths based on the Base Data Path
 NEW_FILES_FOLDER = os.path.join(BASE_DATA_PATH, "Daily_Player_Logs")
