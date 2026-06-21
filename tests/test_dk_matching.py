@@ -31,3 +31,22 @@ def test_empty_db_list_does_not_crash():
 
 def test_sql_in_list_escapes_quotes():
     assert dk_matching.to_sql_in_list(["O'Neal", "Curry"]) == "O''Neal', 'Curry"
+
+
+def test_dedup_same_db_name():
+    # Two DK names that both fuzzy-match the same DB name should yield one result.
+    matched, unmatched = dk_matching.match_names(
+        ["LeBron James", "Lebron James"], ["LeBron James"]
+    )
+    assert matched == ["LeBron James"]
+    assert unmatched == []
+
+
+def test_threshold_boundary():
+    # Score exactly at threshold (90) should match; a completely alien name should not.
+    matched_exact, _ = dk_matching.match_names(["LeBron James"], ["LeBron James"])
+    assert "LeBron James" in matched_exact
+
+    matched_miss, unmatched_miss = dk_matching.match_names(["Zzqx Xvbq"], ["LeBron James"])
+    assert matched_miss == []
+    assert len(unmatched_miss) == 1

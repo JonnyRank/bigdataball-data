@@ -16,10 +16,10 @@ def find_dk_file_path():
 def load_dk_names(dk_file_path):
     """Detect the header row and return the list of unique player names.
 
-    Returns None if the file is missing or has no 'Name' column (callers treat
-    None as 'abort this pipeline' — matching the current early-return behavior).
+    Returns None if the file is missing, unreadable, or has no 'Name' column
+    (callers treat None as 'abort this pipeline').
     """
-    import pandas as pd
+    import pandas as pd  # deferred: callers of match_names/to_sql_in_list don't need it
 
     if not os.path.exists(dk_file_path):
         print(f"ERROR: Could not find file at {dk_file_path}")
@@ -27,19 +27,23 @@ def load_dk_names(dk_file_path):
 
     print(f"Reading file: {dk_file_path}")
     header_row_index = 0
-    with open(dk_file_path, "r") as f:
-        lines = f.readlines()
-    for i, line in enumerate(lines[:50]):
-        if "Position" in line and "Name + ID" in line:
-            header_row_index = i
-            break
+    try:
+        with open(dk_file_path, "r", encoding="utf-8-sig") as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines[:50]):
+            if "Position" in line and "Name + ID" in line:
+                header_row_index = i
+                break
 
-    dk_df = pd.read_csv(dk_file_path, header=header_row_index)
-    if "Name" not in dk_df.columns:
-        print("ERROR: Could not find 'Name' column.")
+        dk_df = pd.read_csv(dk_file_path, header=header_row_index, encoding="utf-8-sig")
+        if "Name" not in dk_df.columns:
+            print("ERROR: Could not find 'Name' column.")
+            return None
+        dk_df = dk_df.dropna(subset=["Name"])
+        return dk_df["Name"].unique().tolist()
+    except Exception as e:
+        print(f"ERROR: Failed to read or parse DK file: {e}")
         return None
-    dk_df = dk_df.dropna(subset=["Name"])
-    return dk_df["Name"].unique().tolist()
 
 
 def match_names(dk_names, valid_db_names, threshold=MATCH_THRESHOLD):
