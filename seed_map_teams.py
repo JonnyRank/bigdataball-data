@@ -22,10 +22,10 @@ import sys
 # Keys are matched case-insensitively (after whitespace normalisation) against
 # raw TEAM strings coming from BigDataBall source files.
 #
-# NOTE: confirm the abbreviation convention (GS vs GSW, NY vs NYK, NO vs NOP,
-# SA vs SAS, PHX vs PHO) against the real data before treating these as final.
-# The dict covers several plausible raw-name formats; the actual keys that match
-# depend on how BigDataBall formats team names in the source .xlsx files.
+# Abbreviation convention confirmed against real data: three-letter forms
+# (GSW, NOP, NYK, SAS) — not the shorter two-letter variants.
+# Raw team names are city-only or two-word city ("Golden State", "LA Clippers"),
+# not "City Nickname" full names.
 TEAM_ABBREVIATIONS = {
     "atlanta": "ATL", "atlanta hawks": "ATL",
     "boston": "BOS", "boston celtics": "BOS",
@@ -36,7 +36,7 @@ TEAM_ABBREVIATIONS = {
     "dallas": "DAL", "dallas mavericks": "DAL",
     "denver": "DEN", "denver nuggets": "DEN",
     "detroit": "DET", "detroit pistons": "DET",
-    "golden state": "GS", "golden state warriors": "GS",
+    "golden state": "GSW", "golden state warriors": "GSW",
     "houston": "HOU", "houston rockets": "HOU",
     "indiana": "IND", "indiana pacers": "IND",
     "la clippers": "LAC", "los angeles clippers": "LAC", "clippers": "LAC",
@@ -45,15 +45,15 @@ TEAM_ABBREVIATIONS = {
     "miami": "MIA", "miami heat": "MIA",
     "milwaukee": "MIL", "milwaukee bucks": "MIL",
     "minnesota": "MIN", "minnesota timberwolves": "MIN",
-    "new orleans": "NO", "new orleans pelicans": "NO",
-    "new york": "NY", "new york knicks": "NY",
+    "new orleans": "NOP", "new orleans pelicans": "NOP",
+    "new york": "NYK", "new york knicks": "NYK",
     "oklahoma city": "OKC", "oklahoma city thunder": "OKC",
     "orlando": "ORL", "orlando magic": "ORL",
     "philadelphia": "PHI", "philadelphia 76ers": "PHI",
     "phoenix": "PHX", "phoenix suns": "PHX",
     "portland": "POR", "portland trail blazers": "POR",
     "sacramento": "SAC", "sacramento kings": "SAC",
-    "san antonio": "SA", "san antonio spurs": "SA",
+    "san antonio": "SAS", "san antonio spurs": "SAS",
     "toronto": "TOR", "toronto raptors": "TOR",
     "utah": "UTA", "utah jazz": "UTA",
     "washington": "WAS", "washington wizards": "WAS",
@@ -125,26 +125,25 @@ def _distinct_team_names(conn):
     return [n for n in names if not (n in seen or seen.add(n))]
 
 
-def _canonical_rows():
-    """Best-effort 30-row seed for a completely empty DB.
+# Confirmed BigDataBall raw team name format: city-only or two-word city,
+# using "LA" (not "Los Angeles") and no team nickname.
+_BIGDATABALL_TEAM_NAMES = [
+    "Atlanta", "Boston", "Brooklyn", "Charlotte", "Chicago",
+    "Cleveland", "Dallas", "Denver", "Detroit", "Golden State",
+    "Houston", "Indiana", "LA Clippers", "LA Lakers", "Memphis",
+    "Miami", "Milwaukee", "Minnesota", "New Orleans", "New York",
+    "Oklahoma City", "Orlando", "Philadelphia", "Phoenix", "Portland",
+    "Sacramento", "San Antonio", "Toronto", "Utah", "Washington",
+]
 
-    Uses the multi-word keys in TEAM_ABBREVIATIONS (the full 'City Nickname'
-    forms), title-cased back to a plausible raw team name.  These are GUESSES
-    and should be replaced by re-running seed_map_teams.py after the first real
-    data ingestion.
+
+def _canonical_rows():
+    """30-row seed using the confirmed BigDataBall raw team name format.
+
+    All 30 names resolve through TEAM_ABBREVIATIONS. The data-derivation path
+    in main() is preferred when fantasy_logs already exists.
     """
-    rows = []
-    for key, abbr in TEAM_ABBREVIATIONS.items():
-        if " " in key and key not in ("la clippers", "la lakers"):
-            rows.append((key.title(), abbr))
-    # Deduplicate by abbreviation, keeping the first occurrence.
-    seen = set()
-    unique = []
-    for raw, abbr in rows:
-        if abbr not in seen:
-            seen.add(abbr)
-            unique.append((raw, abbr))
-    return unique
+    return [(name, TEAM_ABBREVIATIONS.get(normalize(name))) for name in _BIGDATABALL_TEAM_NAMES]
 
 
 # ---------------------------------------------------------------------------
