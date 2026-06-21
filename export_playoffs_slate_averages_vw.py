@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 import os
 import dk_matching
 import paths
+import seasons
 
 # from datetime import datetime
 
@@ -85,7 +86,7 @@ def run_playoffs_slate_averages_pipeline():
         FROM 
             vw_player_averages_playoffs
         WHERE 
-            SEASON = '2026'
+            SEASON = '{seasons.PLAYOFFS_SEASON}'
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY
             TEAM, PLAYER, SEASON desc
