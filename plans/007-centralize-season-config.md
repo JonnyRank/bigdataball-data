@@ -18,7 +18,7 @@
 - **Risk**: MED
 - **Depends on**: 002 (pytest). Recommended after 006 (same files).
 - **Category**: tech-debt
-- **Planned at**: commit `5576703`, 2026-06-16
+- **Planned at**: commit `a852503`, 2026-06-21 (refreshed for plan 005's merge `#24`; original `5576703` 2026-06-16). Plan 005 (DONE) removed each export's inline path block, shifting the SQL line numbers below up by a few lines. The season literals and their values are **unchanged** — only the cited line numbers were refreshed.
 
 ## Why this matters
 
@@ -34,13 +34,13 @@ the risk of updating one view but not another.
 The season literals, by file:
 
 - `export_slate_averages_vw.py`:
-  - `vw_daily_slate`: `WHERE SEASON in ('2024-25', '2025-26')` (line ~128)
-  - `vw_daily_slate_l30`: `WHERE SEASON = '2025-26'` (line ~172)
+  - `vw_daily_slate`: `WHERE SEASON in ('2024-25', '2025-26')` (line ~124)
+  - `vw_daily_slate_l30`: `WHERE SEASON = '2025-26'` (line ~168)
 - `export_playoffs_slate_averages_vw.py`:
-  - `vw_daily_slate_playoffs`: `WHERE SEASON = '2026'` (line ~128)
+  - `vw_daily_slate_playoffs`: `WHERE SEASON = '2026'` (line ~124)
 - `export_slate_averages_csv.py`:
-  - main CSV query: `WHERE SEASON in ('2024-25', '2025-26')` (line ~127)
-  - L30 CSV query: `WHERE SEASON = '2025-26'` (line ~163)
+  - main CSV query: `WHERE SEASON in ('2024-25', '2025-26')` (line ~124)
+  - L30 CSV query: `WHERE SEASON = '2025-26'` (line ~160)
 
 So three distinct values are in play:
 - **SLATE_SEASONS** = the multi-season span: `('2024-25', '2025-26')`

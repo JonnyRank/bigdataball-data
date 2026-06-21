@@ -18,7 +18,7 @@
 - **Risk**: MED
 - **Depends on**: 002 (pytest). Recommended after 005 (same files).
 - **Category**: tech-debt
-- **Planned at**: commit `5576703`, 2026-06-16
+- **Planned at**: commit `a852503`, 2026-06-21 (refreshed for plan 005's merge `#24`; original `5576703` 2026-06-16). Plan 005 (DONE) wrapped each export's body in a function and replaced the inline 6-line path block with `BASE_DATA_PATH = paths.resolve_base_data_path()` (+`import paths`), shifting the DK-preamble line numbers below by a few lines. The DK-match logic this plan extracts is otherwise **unchanged** — content of every excerpt below still matches; only the cited line numbers were refreshed.
 
 ## Why this matters
 
@@ -33,13 +33,13 @@ function is pure — lets us add the repo's first unit tests for the matching ru
 ## Current state
 
 The near-identical code appears in:
-- `export_slate_averages_vw.py:37-103` (header detect, load, fetch, match, build name string)
-- `export_playoffs_slate_averages_vw.py:37-103` (same, but queries `vw_player_averages_playoffs`)
-- `export_slate_averages_csv.py:39-119` (same, plus it prints mapped names)
+- `export_slate_averages_vw.py:36-100` (header detect, load, fetch, match, build name string), inside `run_slate_averages_pipeline()`
+- `export_playoffs_slate_averages_vw.py:36-100` (same, but queries `vw_player_averages_playoffs`), inside `run_playoffs_slate_averages_pipeline()`
+- `export_slate_averages_csv.py:40-115` (same, plus it prints mapped names), inside `run_slate_averages_smart_export()`
 
 The shared logic, from `export_slate_averages_vw.py`:
 
-Header detection (lines 39-46):
+Header detection (lines 35-42):
 ```python
     header_row_index = 0
     with open(DK_FILE_PATH, "r") as f:
@@ -50,7 +50,7 @@ Header detection (lines 39-46):
             break
 ```
 
-Load + extract names (lines 50-58):
+Load + extract names (lines 46-54):
 ```python
     dk_df = pd.read_csv(DK_FILE_PATH, header=header_row_index)
     if "Name" not in dk_df.columns:
@@ -60,7 +60,7 @@ Load + extract names (lines 50-58):
     dk_names = dk_df["Name"].unique().tolist()
 ```
 
-Match (lines 74-97), using `from thefuzz import process` and `mappings.PLAYER_NAME_MAP`:
+Match (lines 65-83), using `from thefuzz import process` and `mappings.PLAYER_NAME_MAP`:
 ```python
     for dk_name in dk_names:
         if dk_name in mappings.PLAYER_NAME_MAP:

@@ -16,10 +16,10 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: 005 (so the new script uses `paths.resolve_base_data_path()`). If 005
-  is not yet done, use the same inline path block the other scripts currently use.
+- **Depends on**: 005 — **now DONE** (`paths.py` with `paths.resolve_base_data_path()`
+  exists at repo root; use it directly).
 - **Category**: dx
-- **Planned at**: commit `5576703`, 2026-06-16
+- **Planned at**: commit `a852503`, 2026-06-21 (refreshed for plan 005's merge `#24`; original `5576703` 2026-06-16). Plan 005 (DONE) introduced `paths.py` and shifted `create_summary_tables.py`'s line numbers up; the table-name constant, `required_tables` membership, join columns (`RAW_TEAM_NAME`/`TEAM_ABBREVIATION`) and merge code are **unchanged** — only line numbers refreshed.
 
 ## Why this matters
 
@@ -42,9 +42,9 @@ best-effort mapping otherwise. Do not hardcode raw names blindly.
 
 `create_summary_tables.py` reads the table like this:
 
-- `MAP_TEAMS_TABLE_NAME = "map_teams"` (line ~25)
-- It is in `required_tables` (lines ~42-48): the summary aborts if missing.
-- The join (lines ~80-87):
+- `MAP_TEAMS_TABLE_NAME = "map_teams"` (line ~18)
+- It is in `required_tables` (lines ~35-40): the summary aborts if missing.
+- The join (lines ~73-80):
 ```python
         df = pd.merge(
             df,
