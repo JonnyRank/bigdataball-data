@@ -1,9 +1,9 @@
 import seasons
 
 
-def test_slate_seasons_sql_renders_quoted_csv():
-    # Exactly the body that goes inside SQL IN (...)
-    assert seasons.slate_seasons_sql() == "'2024-25', '2025-26'"
+def test_slate_seasons_sql_renders_quoted_csv(monkeypatch):
+    monkeypatch.setattr(seasons, "SLATE_SEASONS", ("2000-01", "2001-02"))
+    assert seasons.slate_seasons_sql() == "'2000-01', '2001-02'"
 
 
 def test_constants_have_expected_shapes():
