@@ -48,7 +48,7 @@ The riskiest files to change: `daily_fantasy_log_upload.py` (orchestrator + inli
 
 ## Repo-Specific Pitfalls
 
-- **Season strings are hardcoded** and differ per view — update each at season rollover (see `docs/codebase/CONVENTIONS.md` Hardcoded Season Filters).
+- **Season filters live in `seasons.py`** — at season rollover, edit only the three constants there (`SLATE_SEASONS`, `L30_SEASON`, `PLAYOFFS_SEASON`). See `docs/codebase/CONVENTIONS.md` Season Filters.
 - **`map_teams` must pre-exist** — `create_summary_tables.py` reads it but no Python script creates it. Seed from `create_team_map_table.sql` (git-ignored via `*.sql`; see `docs/codebase/ARCHITECTURE.md`) on a fresh DB.
 - **Duplicate log rows inflate every average.** After `check_ingest_duplicates.py --remove`, re-run `create_summary_tables.py` and the slate exports.
 - **Google Drive auth is interactive** — first run opens a browser; headless runs require a pre-existing valid `token.json`.

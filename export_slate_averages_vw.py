@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 import os
 import dk_matching
 import paths
+import seasons
 
 # from datetime import datetime
 
@@ -85,7 +86,7 @@ def run_slate_averages_pipeline():
         FROM 
             vw_player_averages_regular_season
         WHERE 
-            SEASON in ('2024-25', '2025-26')
+            SEASON in ({seasons.slate_seasons_sql()})
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY
             TEAM, PLAYER, SEASON desc
@@ -109,7 +110,7 @@ def run_slate_averages_pipeline():
         view_name_l30 = "vw_daily_slate_l30"
         drop_view_l30_sql = f"DROP VIEW IF EXISTS {view_name_l30}"
 
-        # This new view includes L30FPPM and is filtered to only the 2025-26 season.
+        # This new view includes L30FPPM and is filtered to the current L30 season (seasons.L30_SEASON).
         create_view_l30_sql = f"""
         CREATE VIEW {view_name_l30} AS
         SELECT
@@ -129,7 +130,7 @@ def run_slate_averages_pipeline():
         FROM
             vw_player_averages_regular_season
         WHERE
-            SEASON = '2025-26'
+            SEASON = '{seasons.L30_SEASON}'
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY
             TEAM, PLAYER

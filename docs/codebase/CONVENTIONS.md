@@ -54,13 +54,14 @@ Two coexisting idioms — **match the file you are editing**:
 - **Maintenance scripts:** `sqlite3.OperationalError` filtered on `"no such table"`/`"no such column"` to skip absent tables (`run_db_patch.py:61-67`).
 - Style is print-based logging; **no `logging` module** is used anywhere.
 
-## Hardcoded Season Filters (gotcha)
+## Season Filters
 
-Season strings are hardcoded and **differ per view** — update each at season rollover:
-- `vw_daily_slate`: `'2024-25', '2025-26'` (`export_slate_averages_vw.py:128`)
-- `vw_daily_slate_l30`: `'2025-26'` only (`export_slate_averages_vw.py:172`)
-- `vw_daily_slate_playoffs`: `'2026'` (`export_playoffs_slate_averages_vw.py:128`)
-Plan 007 (TODO) proposes centralizing these.
+Season constants live in **`seasons.py`** (plan 007, DONE). At the start of each NBA season, update the three values there — nothing else needs changing:
+- `SLATE_SEASONS` — multi-season span for `vw_daily_slate` and the main CSV export
+- `L30_SEASON` — current regular season for L30 views/CSVs (must equal `SLATE_SEASONS[-1]`)
+- `PLAYOFFS_SEASON` — current playoff year for `vw_daily_slate_playoffs`
+
+The export scripts interpolate these via `{seasons.slate_seasons_sql()}` / `{seasons.L30_SEASON}` / `{seasons.PLAYOFFS_SEASON}`.
 
 ## Evidence
 

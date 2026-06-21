@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 import dk_matching
 import paths
+import seasons
 
 
 def run_slate_averages_smart_export():
@@ -73,7 +74,7 @@ def run_slate_averages_smart_export():
         FROM 
             vw_player_averages_regular_season
         WHERE 
-            SEASON in ('2024-25', '2025-26')
+            SEASON in ({seasons.slate_seasons_sql()})
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY 
             TEAM, PLAYER, SEASON DESC;
@@ -109,7 +110,7 @@ def run_slate_averages_smart_export():
         FROM
             vw_player_averages_regular_season
         WHERE
-            SEASON = '2025-26'
+            SEASON = '{seasons.L30_SEASON}'
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY
             TEAM, PLAYER
