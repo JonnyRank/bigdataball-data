@@ -9,6 +9,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import os
 import mappings
+import paths
 
 # from datetime import datetime
 from thefuzz import process
@@ -18,12 +19,7 @@ def run_slate_averages_pipeline():
     print("--- Starting Slate Averages Pipeline (View Creation) ---")
 
     # --- 1. Setup Paths ---
-    if os.path.exists(r"G:\My Drive"):
-        BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
-    else:
-        # Fallback to local
-        PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-        BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
+    BASE_DATA_PATH = paths.resolve_base_data_path()
 
     DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
     DOWNLOADS_FOLDER = os.path.join(os.path.expanduser("~"), "Downloads")
