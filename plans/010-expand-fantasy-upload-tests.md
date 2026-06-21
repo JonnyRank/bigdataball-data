@@ -18,7 +18,7 @@
 - **Depends on**: none (fixture and helpers already exist)
 - **Category**: tests
 - **Planned at**: commit `3844392`, 2026-06-21
-- **Issue**: <!-- filled in after GitHub issue is created -->
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/28
 
 ## Why this matters
 

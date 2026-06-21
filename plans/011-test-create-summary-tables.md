@@ -18,7 +18,7 @@
 - **Depends on**: none (uses the same env-seam pattern as existing fixtures)
 - **Category**: tests
 - **Planned at**: commit `3844392`, 2026-06-21
-- **Issue**: <!-- filled in after GitHub issue is created -->
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/29
 
 ## Why this matters
 

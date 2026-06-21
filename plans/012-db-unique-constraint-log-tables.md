@@ -18,7 +18,7 @@
 - **Depends on**: none (but MUST run `check_ingest_duplicates.py --remove` on the live DB before deploying — see Step 1)
 - **Category**: data-integrity
 - **Planned at**: commit `3844392`, 2026-06-21
-- **Issue**: <!-- filled in after GitHub issue is created -->
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/30
 
 ## Why this matters
 

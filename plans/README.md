@@ -22,9 +22,9 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 007  | Centralize hardcoded season filters | P3 | S | 002 (006 recommended) | DONE (executed @ `da3211f`; `seasons.py` created, 3 export scripts sourced from module, 2 new tests pass, 15 tests total) | [#10](https://github.com/JonnyRank/bigdataball-data/issues/10) |
 | 008  | Seed the `map_teams` table for fresh DBs | P2 | M | 005 (DONE) | TODO (refreshed @ `a852503`: dependency 005 now met; line numbers shifted) | [#11](https://github.com/JonnyRank/bigdataball-data/issues/11) |
 | 009  | Convert flat layout to a `src/bigdataball/` package | P2 | M | none (rebases paths of 003–008) | TODO (major refresh @ `a852503`: 005 added `paths.py` → 15 modules, path-fix now a single line in `paths.py`, test count 18) | — |
-| 010  | Expand fantasy log upload test suite | P2 | M | none (fixture + helpers exist) | TODO | — |
-| 011  | Add tests for `create_summary_tables.py` | P2 | L | none | TODO | — |
-| 012  | Add DB-level UNIQUE constraint to log tables | P1 | M | none (run `check_ingest_duplicates --remove` first on live DB) | TODO | — |
+| 010  | Expand fantasy log upload test suite | P2 | M | none (fixture + helpers exist) | TODO | [#28](https://github.com/JonnyRank/bigdataball-data/issues/28) |
+| 011  | Add tests for `create_summary_tables.py` | P2 | L | none | TODO | [#29](https://github.com/JonnyRank/bigdataball-data/issues/29) |
+| 012  | Add DB-level UNIQUE constraint to log tables | P1 | M | none (run `check_ingest_duplicates --remove` first on live DB) | TODO | [#30](https://github.com/JonnyRank/bigdataball-data/issues/30) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
