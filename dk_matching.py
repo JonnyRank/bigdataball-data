@@ -21,7 +21,7 @@ def load_dk_names(dk_file_path):
     """
     import pandas as pd  # deferred: callers of match_names/to_sql_in_list don't need it
 
-    if not os.path.exists(dk_file_path):
+    if not dk_file_path or not os.path.exists(dk_file_path):
         print(f"ERROR: Could not find file at {dk_file_path}")
         return None
 
@@ -54,6 +54,8 @@ def match_names(dk_names, valid_db_names, threshold=MATCH_THRESHOLD):
     """
     matched = []
     unmatched = []
+    # Strip None/NaN/non-string values that can appear when the DB view has NULL rows.
+    valid_db_names = [n for n in valid_db_names if isinstance(n, str) and n.strip()]
     # Guard: process.extractOne raises on an empty choice list. If the DB/view returned
     # no players (a fresh DB, or an out-of-season playoffs view), treat every DK name as
     # unmatched rather than crashing the pipeline. This is a deliberate robustness
@@ -77,5 +79,7 @@ def match_names(dk_names, valid_db_names, threshold=MATCH_THRESHOLD):
 
 def to_sql_in_list(names):
     """Single-quote-escape and join names for a SQL IN (...) clause."""
+    if not names:
+        return ""
     formatted = [name.replace("'", "''") for name in names]
     return "', '".join(formatted)
