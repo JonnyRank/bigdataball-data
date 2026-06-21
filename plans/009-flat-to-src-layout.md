@@ -20,11 +20,11 @@
 - **Risk**: MED
 - **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of plans 003–008)
 - **Category**: tech-debt
-- **Planned at**: commit `8bf4ce0`, 2026-06-18 (refreshed again at `198d5b9`, 2026-06-20 for plan 004's merge; original `a91aac1` 2026-06-17). Import-graph excerpts and the `PROJECT_ROOT` line re-verified unchanged at HEAD; plan 004 added `tests/test_orchestrator_warnings.py` (handled below) and only touched `daily_fantasy_log_upload.py`'s `main()` section, not the imports.
+- **Planned at**: commit `a852503`, 2026-06-21 (refreshed for plan 005's merge `#24`; prior refreshes `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh:** plan 005 added a new `paths.py` module and consolidated every per-script `PROJECT_ROOT`/`Data/`-fallback into `paths.resolve_base_data_path()`. Consequences for this plan, all handled below: (1) there are now **15** runtime modules to move, not 14 — `paths.py` is the new one; (2) nine modules now `import paths` and must be converted to `from . import paths` (Step 2); (3) the `__file__`-based path-resolution fix (Step 3) now applies to a **single** line in `paths.py`, not nine files; (4) plan 005 added `tests/test_paths.py` (2 tests) → total test count is now **18**.
 
 ## Why this matters
 
-The repo is a flat collection of 14 top-level `.py` modules that import each
+The repo is a flat collection of 15 top-level `.py` modules that import each
 other by bare name (`import mappings`, `from auth_manager import ...`). A flat
 layout makes the importable code indistinguishable from scripts, config, and
 tests at the repo root, lets tests accidentally import from the working
@@ -39,22 +39,27 @@ changes, no API changes, no new behavior.
 
 ## Current state
 
-All 14 runtime modules live at the repo root. Each is **both** an importable
-module **and** runnable directly (every one has an `if __name__ == "__main__"`
-block). The cross-module import graph (verified at commit `a91aac1`):
+All 15 runtime modules live at the repo root (the 14 original modules plus
+`paths.py`, added by plan 005). Each is an importable module; most are also
+runnable directly (`if __name__ == "__main__"`). The cross-module import graph
+(verified at commit `a852503`). Note that nine modules now also `import paths`
+(added by plan 005) — these conversions are in Step 2:
 
 ```
-daily_player_upload.py:13            import mappings
+paths.py                             (no internal imports — pure stdlib)
+daily_player_upload.py               import mappings ; import paths
 email_notifier.py:3                  import config
 auth_manager.py:5                    import config
-run_db_patch.py:3                    import mappings
-export_slate_averages_csv.py:15      import mappings
-export_slate_averages_vw.py:11       import mappings
-export_playoffs_slate_averages_vw.py:11   import mappings
-verify_db_patch.py:3                 import mappings
+run_db_patch.py                      import mappings ; import paths
+export_slate_averages_csv.py         import mappings ; import paths
+export_slate_averages_vw.py          import mappings ; import paths
+export_playoffs_slate_averages_vw.py import mappings ; import paths
+verify_db_patch.py                   import mappings ; import paths
+check_ingest_duplicates.py           import paths
+create_summary_tables.py             import paths
 drive_ingestion.py:5                 from auth_manager import authenticate_google_drive
 drive_ingestion.py:6                 import config
-daily_fantasy_log_upload.py:12-19    import create_summary_tables
+daily_fantasy_log_upload.py          import paths ; import create_summary_tables
                                      import export_slate_averages_vw
                                      import export_playoffs_slate_averages_vw
                                      import export_slate_averages_csv
@@ -64,49 +69,27 @@ daily_fantasy_log_upload.py:12-19    import create_summary_tables
                                      import mappings
 ```
 
-`config.py`, `mappings.py`, and `check_ingest_duplicates.py` have **no**
-internal imports.
+`config.py` and `mappings.py` have **no** internal imports.
 
-**The critical gotcha — `__file__`-based path resolution.** Nine files compute a
-project root from `__file__` and fall back to a local `Data/` folder under it.
-Example, `daily_player_upload.py:15-27`:
-
-```python
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-...
-if os.environ.get("BIGDATABALL_DATA_DIR"):
-    BASE_DATA_PATH = os.environ["BIGDATABALL_DATA_DIR"]
-elif os.path.exists(r"G:\My Drive"):
-    BASE_DATA_PATH = r"G:\My Drive\Documents\bigdataball"
-else:
-    BASE_DATA_PATH = os.path.join(PROJECT_ROOT, "Data")
-```
-
-Today `PROJECT_ROOT` **is** the repo root (the file sits at the root). After the
-move to `src/bigdataball/<file>.py`, `dirname(abspath(__file__))` becomes
-`<repo>/src/bigdataball`, so the local fallback would resolve to
-`<repo>/src/bigdataball/Data` instead of `<repo>/Data`. **This must be fixed**
-by walking up two extra directory levels so `PROJECT_ROOT` keeps pointing at the
-repo root. The nine files and the exact line that defines `PROJECT_ROOT` (note
-the three export files define it *inside* a function, in the `else` branch):
-
-| File | `PROJECT_ROOT` line | Has `Data/` fallback |
-|------|--------------------|----------------------|
-| `daily_player_upload.py` | 16 | yes |
-| `daily_fantasy_log_upload.py` | 24 | yes |
-| `create_summary_tables.py` | 9 | yes |
-| `check_ingest_duplicates.py` | 82 | yes |
-| `run_db_patch.py` | 6 | yes |
-| `verify_db_patch.py` | 6 | yes |
-| `export_slate_averages_csv.py` | 26 (inside `run_slate_averages_smart_export`) | yes |
-| `export_slate_averages_vw.py` | 25 (inside a function) | yes |
-| `export_playoffs_slate_averages_vw.py` | 25 (inside a function) | yes |
-
-Every one of these nine defines it with the identical expression:
+**The critical gotcha — `__file__`-based path resolution.** As of plan 005 this
+logic lives in exactly **one** place: `paths.py`. All nine data-touching scripts
+now call `paths.resolve_base_data_path()` instead of computing their own
+`PROJECT_ROOT`. The relevant code is `paths.py:17-18`:
 
 ```python
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.abspath(__file__))
+return os.path.join(project_root, "Data")
 ```
+
+Today `paths.py` sits at the repo root, so `project_root` **is** the repo root.
+After the move to `src/bigdataball/paths.py`, `dirname(abspath(__file__))`
+becomes `<repo>/src/bigdataball`, so the local fallback would resolve to
+`<repo>/src/bigdataball/Data` instead of `<repo>/Data`. **This must be fixed** in
+`paths.py` only, by walking up two extra directory levels (Step 3). No other
+module contains a `PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))`
+line any more — verify with
+`grep -rn "os.path.dirname(os.path.abspath(__file__))" *.py` → the only match is
+`paths.py:17`.
 
 `config.py` hardcodes `BASE_DOWNLOAD_DIR = r"G:\My Drive\..."` with no
 `__file__`/`Data/` logic, and `drive_ingestion.py` derives its paths from
@@ -136,10 +119,17 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
   `fantasy_upload` fixture via pytest injection and references submodules as attributes of
   the loaded module (`mod.daily_player_upload`, etc.) — **no direct `import_module` calls,
   no bare module-name strings, no changes needed**.
+- `tests/test_paths.py` (added by plan 005): two tests that call `import paths`
+  **inside** the test functions and reference `paths.resolve_base_data_path()` /
+  `paths.__file__`. After the move, replace `import paths` with
+  `from bigdataball import paths` in both functions (the `import paths` lines are
+  local to each test body — there are two). The `paths.__file__`-based `expected`
+  assertion keeps working because it derives `Data/` from the module's own
+  location.
 - `tests/helpers.py`, `tests/__init__.py` need no changes.
-- **Total test count is 16** (10 check_ingest + 4 player_upload + 1 fantasy_upload +
-  1 orchestrator_warnings). Plan 009 adds no tests and removes none; the executor should
-  see 16 pass after the move.
+- **Total test count is 18** (10 check_ingest + 4 player_upload + 1 fantasy_upload +
+  1 orchestrator_warnings + 2 paths). Plan 009 adds no tests and removes none; the
+  executor should see 18 pass after the move.
 
 **CI**: `.github/workflows/test.yml` installs
 `pip install -r requirements.txt -r requirements-dev.txt` then runs
@@ -158,25 +148,25 @@ unchanged — only the import line changes, never the call sites.
 | Run tests | `python -m pytest -q` | all tests pass, exit 0 |
 | Editable install | `pip install -e .` | exit 0, `Successfully installed bigdataball-...` |
 | Import smoke test | (see Step 7) | prints `ALL IMPORTS OK`, exit 0 |
-| List package files | `ls src/bigdataball/` | the 14 modules + `__init__.py` |
+| List package files | `ls src/bigdataball/` | the 15 modules + `__init__.py` |
 | Confirm no stray root modules | `ls *.py` | `No such file or directory` (or only non-package files if any remain) |
 
 ## Scope
 
 **In scope** (the only files you should create, move, or modify):
 
-- Move (with `git mv`) these 14 files from repo root into `src/bigdataball/`:
+- Move (with `git mv`) these 15 files from repo root into `src/bigdataball/`:
   `auth_manager.py`, `check_ingest_duplicates.py`, `config.py`,
   `create_summary_tables.py`, `daily_fantasy_log_upload.py`,
   `daily_player_upload.py`, `drive_ingestion.py`, `email_notifier.py`,
   `export_playoffs_slate_averages_vw.py`, `export_slate_averages_csv.py`,
-  `export_slate_averages_vw.py`, `mappings.py`, `run_db_patch.py`,
+  `export_slate_averages_vw.py`, `mappings.py`, `paths.py`, `run_db_patch.py`,
   `verify_db_patch.py`
 - Create `src/bigdataball/__init__.py` (empty)
 - Create `pyproject.toml` (repo root)
 - Edit `pytest.ini`
 - Edit `.github/workflows/test.yml`
-- Edit `tests/conftest.py`, `tests/test_check_ingest_duplicates.py`
+- Edit `tests/conftest.py`, `tests/test_check_ingest_duplicates.py`, `tests/test_paths.py`
 - Edit the import lines and `PROJECT_ROOT` lines inside the moved modules (per
   the tables above)
 - Edit the documentation command blocks in `CLAUDE.md` and
@@ -211,7 +201,7 @@ unchanged — only the import line changes, never the call sites.
 
 ### Step 1: Create the package directory and move the modules
 
-Create `src/bigdataball/` and `git mv` all 14 in-scope modules into it. Then
+Create `src/bigdataball/` and `git mv` all 15 in-scope modules into it. Then
 create an empty `src/bigdataball/__init__.py`.
 
 ```bash
@@ -220,11 +210,11 @@ git mv auth_manager.py check_ingest_duplicates.py config.py \
        create_summary_tables.py daily_fantasy_log_upload.py daily_player_upload.py \
        drive_ingestion.py email_notifier.py export_playoffs_slate_averages_vw.py \
        export_slate_averages_csv.py export_slate_averages_vw.py mappings.py \
-       run_db_patch.py verify_db_patch.py src/bigdataball/
+       paths.py run_db_patch.py verify_db_patch.py src/bigdataball/
 touch src/bigdataball/__init__.py
 ```
 
-**Verify**: `ls src/bigdataball/` → lists the 14 modules plus `__init__.py`.
+**Verify**: `ls src/bigdataball/` → lists the 15 modules plus `__init__.py`.
 `ls *.py` at repo root → `No such file or directory` (no module files left at
 root). `python -m pytest -q` will FAIL here (imports not yet fixed) — that is
 expected; do not try to fix tests yet.
@@ -235,19 +225,21 @@ Edit the moved files so every internal import becomes a relative import. The
 module-reference name used elsewhere in each file is unchanged — only the
 `import` line changes. Make exactly these replacements:
 
-- `src/bigdataball/daily_player_upload.py`: `import mappings` → `from . import mappings`
+- `src/bigdataball/daily_player_upload.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
 - `src/bigdataball/email_notifier.py`: `import config` → `from . import config`
 - `src/bigdataball/auth_manager.py`: `import config` → `from . import config`
-- `src/bigdataball/run_db_patch.py`: `import mappings` → `from . import mappings`
-- `src/bigdataball/export_slate_averages_csv.py`: `import mappings` → `from . import mappings`
-- `src/bigdataball/export_slate_averages_vw.py`: `import mappings` → `from . import mappings`
-- `src/bigdataball/export_playoffs_slate_averages_vw.py`: `import mappings` → `from . import mappings`
-- `src/bigdataball/verify_db_patch.py`: `import mappings` → `from . import mappings`
+- `src/bigdataball/run_db_patch.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
+- `src/bigdataball/export_slate_averages_csv.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
+- `src/bigdataball/export_slate_averages_vw.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
+- `src/bigdataball/export_playoffs_slate_averages_vw.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
+- `src/bigdataball/verify_db_patch.py`: `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
+- `src/bigdataball/check_ingest_duplicates.py`: `import paths` → `from . import paths`
+- `src/bigdataball/create_summary_tables.py`: `import paths` → `from . import paths`
 - `src/bigdataball/drive_ingestion.py`:
   - `from auth_manager import authenticate_google_drive` → `from .auth_manager import authenticate_google_drive`
   - `import config` → `from . import config`
-- `src/bigdataball/daily_fantasy_log_upload.py`: replace the eight-line import
-  block (currently lines 12–19)
+- `src/bigdataball/daily_fantasy_log_upload.py`: replace the nine-line import
+  block (currently lines 12–20)
 
   ```python
   import create_summary_tables
@@ -258,6 +250,7 @@ module-reference name used elsewhere in each file is unchanged — only the
   import drive_ingestion
   import email_notifier
   import mappings
+  import paths
   ```
 
   with:
@@ -271,9 +264,10 @@ module-reference name used elsewhere in each file is unchanged — only the
   from . import drive_ingestion
   from . import email_notifier
   from . import mappings
+  from . import paths
   ```
 
-**Verify**: `grep -rn -E "^import (mappings|config|create_summary_tables|export_[a-z_]+|daily_player_upload|drive_ingestion|email_notifier)$|^from (auth_manager|config|mappings) import" src/bigdataball/` → **no matches** (all internal imports are now relative). The `export_[a-z_]+` branch matches all three export modules (`export_slate_averages_vw`, `export_playoffs_slate_averages_vw`, `export_slate_averages_csv`), not just a bare `export_`.
+**Verify**: `grep -rn -E "^import (mappings|paths|config|create_summary_tables|export_[a-z_]+|daily_player_upload|drive_ingestion|email_notifier)$|^from (auth_manager|config|mappings) import" src/bigdataball/` → **no matches** (all internal imports are now relative). The `export_[a-z_]+` branch matches all three export modules (`export_slate_averages_vw`, `export_playoffs_slate_averages_vw`, `export_slate_averages_csv`), not just a bare `export_`.
 
 > **Expected behavior after this step — NOT a bug to "fix".** Once the internal
 > imports are relative, running a module by its file path
@@ -286,36 +280,33 @@ module-reference name used elsewhere in each file is unchanged — only the
 
 ### Step 3: Fix the `__file__`-based project-root resolution (the critical gotcha)
 
-In each of the **nine** files listed in the "Current state" table, the
-expression
+As of plan 005 this logic lives in exactly **one** file: `paths.py`. The other
+modules call `paths.resolve_base_data_path()` and need no path edits. In
+`src/bigdataball/paths.py` the `Data/` fallback (currently `paths.py:17-18`) is:
 
 ```python
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.abspath(__file__))
+return os.path.join(project_root, "Data")
 ```
 
-now resolves to `<repo>/src/bigdataball` instead of the repo root. Replace it in
-all nine files with a version that walks up two more levels back to the repo
-root, and add a clarifying comment:
+After the move, `dirname(abspath(__file__))` resolves to `<repo>/src/bigdataball`
+instead of the repo root, so the fallback would point at
+`<repo>/src/bigdataball/Data`. Replace those two lines with a version that walks
+up two more levels back to the repo root, and add a clarifying comment:
 
 ```python
-# Repo root: the module now lives at <repo>/src/bigdataball/<file>.py,
+# Repo root: this module now lives at <repo>/src/bigdataball/paths.py,
 # so go up three levels to reach <repo> (keeps the local Data/ fallback correct).
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+return os.path.join(project_root, "Data")
 ```
 
-The nine files: `daily_player_upload.py`, `daily_fantasy_log_upload.py`,
-`create_summary_tables.py`, `check_ingest_duplicates.py`, `run_db_patch.py`,
-`verify_db_patch.py`, `export_slate_averages_csv.py`,
-`export_slate_averages_vw.py`, `export_playoffs_slate_averages_vw.py`.
-
-In the three `export_*` files the line is **inside a function** (the `else`
-branch); replace it there. Do **not** add the fix to `config.py`,
-`auth_manager.py`, `email_notifier.py`, or `drive_ingestion.py` — they have no
-`Data/` fallback.
+Edit **only** `paths.py`. Do not add this fix anywhere else — no other module
+computes a project root from `__file__` any more.
 
 **Verify**:
-- `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` → **no matches** (every occurrence was deepened). Note: match the full `PROJECT_ROOT = ...` assignment, not the bare `os.path.dirname(os.path.abspath(__file__))` expression — the latter is a substring of the triple-dirname replacement and would falsely match every fixed line.
-- `grep -rcn "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/ | grep -v ':0$'` → lists exactly nine files.
+- `grep -rn "os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` → matches **only** `paths.py` (and that line is now the inner expression of the triple-dirname replacement). To confirm the fix landed, the next grep is authoritative.
+- `grep -rln "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/` → lists exactly **one** file: `src/bigdataball/paths.py`.
 
 ### Step 4: Create `pyproject.toml`
 
@@ -382,14 +373,20 @@ Prefix them all with `bigdataball.`:
 - `sys.modules.pop("check_ingest_duplicates", None)` → `sys.modules.pop("bigdataball.check_ingest_duplicates", None)` (**both** occurrences)
 - `importlib.import_module("check_ingest_duplicates")` → `importlib.import_module("bigdataball.check_ingest_duplicates")`
 
+**`tests/test_paths.py`** (added by plan 005): each of its two test functions has
+a local `import paths` line. Change both to `from bigdataball import paths`. The
+`paths.resolve_base_data_path()` and `paths.__file__` references on the following
+lines stay unchanged — they resolve through the `paths` name either way.
+
 Do **not** change the `sys.argv = ["check_ingest_duplicates.py", ...]` lines —
 those are the simulated program name (`argv[0]`) and have no import meaning.
 Do **not** change `tests/test_daily_player_upload.py` or `tests/test_daily_fantasy_log_upload.py` — they use fixtures via injection and `from tests.helpers`, which remain valid.
 
 **Verify**: `grep -rn "import_module(\"daily_player_upload\")\|import_module(\"daily_fantasy_log_upload\")\|import_module(\"check_ingest_duplicates\")" tests/` → **no matches** (all now carry the `bigdataball.` prefix).
 Also: `grep -n '"drive_ingestion"' tests/conftest.py` → **no matches** (key renamed to `"bigdataball.drive_ingestion"`).
+Also: `grep -n "^    import paths$" tests/test_paths.py` → **no matches** (both converted to `from bigdataball import paths`).
 
-### Step 7: Import smoke test (all 14 modules)
+### Step 7: Import smoke test (all 15 modules)
 
 With the package installed (Step 4) confirm every module imports cleanly under
 the package namespace, including the relative imports. The command below is a
@@ -400,7 +397,7 @@ so the two modules that `os.makedirs(...)` at import time don't write into the
 repo:
 
 ```bash
-python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['auth_manager','check_ingest_duplicates','config','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','run_db_patch','verify_db_patch']]; print('ALL IMPORTS OK')"
+python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['auth_manager','check_ingest_duplicates','config','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','paths','run_db_patch','verify_db_patch']]; print('ALL IMPORTS OK')"
 ```
 
 **Verify**: prints `ALL IMPORTS OK`, exit 0. If any module raises
@@ -409,9 +406,9 @@ fix it and re-run.
 
 ### Step 8: Run the full test suite
 
-**Verify**: `python -m pytest -q` → all **16 tests** pass, exit 0 (10
+**Verify**: `python -m pytest -q` → all **18 tests** pass, exit 0 (10
 `test_check_ingest_duplicates`, 4 `test_daily_player_upload`, 1
-`test_daily_fantasy_log_upload`, 1 `test_orchestrator_warnings`). This plan adds no tests and removes none — if
+`test_daily_fantasy_log_upload`, 1 `test_orchestrator_warnings`, 2 `test_paths`). This plan adds no tests and removes none — if
 the count differs, something was moved or shadowed. If any test errors with a
 `ModuleNotFoundError` for `bigdataball.*` or `tests.*`, re-check Steps 5–6.
 
@@ -474,12 +471,12 @@ validated when the workflow runs).
 
 Machine-checkable. ALL must hold:
 
-- [ ] `ls src/bigdataball/__init__.py` exists; all 14 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
+- [ ] `ls src/bigdataball/__init__.py` exists; all 15 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
 - [ ] `pip install -e .` exits 0.
-- [ ] `grep -rn -E "^import (mappings|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
-- [ ] `grep -rn "PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))" src/bigdataball/` returns no matches (PROJECT_ROOT deepened everywhere it had a `Data/` fallback — match the full assignment, not the bare expression, which is a substring of the triple-dirname replacement; same form as Step 3's verify).
+- [ ] `grep -rn -E "^import (mappings|paths|config|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches (all internal imports relative — same pattern as Step 2's verify).
+- [ ] `grep -rln "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/` lists exactly one file, `src/bigdataball/paths.py` (the only `Data/`-fallback path-resolution, deepened per Step 3).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
-- [ ] `python -m pytest -q` exits 0 with exactly 16 tests passing.
+- [ ] `python -m pytest -q` exits 0 with exactly 18 tests passing.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
 - [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
