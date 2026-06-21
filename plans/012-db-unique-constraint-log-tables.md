@@ -38,7 +38,7 @@ data corruption.
 
 ## Current state
 
-**`daily_player_upload.py:55-97`** — `initialize_database()` creates `dim_players`
+**`daily_player_upload.py:33-47`** — `initialize_database()` creates `dim_players`
 with a PK, but does **not** create `player_logs` explicitly — it is created implicitly
 by `to_sql(if_exists="append")` with no schema:
 
@@ -337,10 +337,10 @@ Stop and report back (do not improvise) if:
   silently skips the index creation (table not yet created). The `ensure_unique_index()`
   call immediately after `to_sql()` in `main()` covers this: the index is created from the
   very first insert, not deferred to the second run.
-- **`check_ingest_duplicates.py --remove`** recreates the tables as temp tables and renames.
-  Verify after running it that the unique indexes survive (they should, since they're
-  added to the renamed table — but if the tool's internal CREATE TABLE lacks them, they'd
-  be lost). Run `sqlalchemy.inspect(engine).get_indexes("player_logs")` after any `--remove` run.
+- **`check_ingest_duplicates.py --remove`** removes duplicates with an in-place
+  `DELETE ... WHERE rowid NOT IN (SELECT MIN(rowid) ...)` — it does NOT drop or recreate
+  the table. The unique indexes are preserved automatically because the schema is untouched.
+  No post-`--remove` index verification is required.
 - A reviewer should confirm the try/except in `initialize_database()` catches ONLY the
   `"no such table"` error and re-raises everything else — silencing an unexpected
   OperationalError would hide real problems.
