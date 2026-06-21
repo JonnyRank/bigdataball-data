@@ -127,6 +127,6 @@ There are **no automated tests** in this repository. Validate changes by:
 - **Database is not committed.** The `.db` file is git-ignored. Scripts expect either a Google Drive mount or a local `Data/` directory with the `.xlsx` source files.
 - **Google Drive auth requires interactive browser login** on first use — this cannot run in headless CI without a pre-existing `token.json`.
 - **`map_teams` table** is referenced by `create_summary_tables.py` but is not created by any script in the repo. It must exist in the database before running the summary pipeline.
-- **Season values are hardcoded** in some view-creation scripts (e.g., `'2024-25'`, `'2025-26'`, `'2026'`). Update these when working on a new NBA season.
+- **Season filters live in `seasons.py`** — update the three constants there (`SLATE_SEASONS`, `L30_SEASON`, `PLAYOFFS_SEASON`) when starting a new NBA season. No changes needed in the export scripts.
 - When adding a new player name mapping, add it to `mappings.py` and consider running `run_db_patch.py` to retroactively fix existing data.
 - The `daily_fantasy_log_upload.py` file is the main orchestrator despite its name suggesting it only handles fantasy logs.
