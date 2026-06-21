@@ -50,3 +50,13 @@ def test_threshold_boundary():
     matched_miss, unmatched_miss = dk_matching.match_names(["Zzqx Xvbq"], ["LeBron James"])
     assert matched_miss == []
     assert len(unmatched_miss) == 1
+
+
+def test_non_string_and_whitespace_in_dk_names():
+    # None is dropped; int is coerced to str and goes unmatched; padded name matches.
+    matched, unmatched = dk_matching.match_names(
+        [" LeBron James ", 123, None], ["LeBron James"]
+    )
+    assert matched == ["LeBron James"]
+    assert len(unmatched) == 1
+    assert "123" in unmatched[0]

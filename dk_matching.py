@@ -54,8 +54,10 @@ def match_names(dk_names, valid_db_names, threshold=MATCH_THRESHOLD):
     """
     matched = []
     unmatched = []
+    # Sanitize dk_names: drop None, coerce to str, strip whitespace.
+    dk_names = [str(n).strip() for n in dk_names if n is not None and str(n).strip()]
     # Strip None/NaN/non-string values that can appear when the DB view has NULL rows.
-    valid_db_names = [n for n in valid_db_names if isinstance(n, str) and n.strip()]
+    valid_db_names = [n.strip() for n in valid_db_names if isinstance(n, str) and n.strip()]
     # Guard: process.extractOne raises on an empty choice list. If the DB/view returned
     # no players (a fresh DB, or an out-of-season playoffs view), treat every DK name as
     # unmatched rather than crashing the pipeline. This is a deliberate robustness
