@@ -168,36 +168,41 @@ def main():
     db_path = os.path.join(base, "nba_fantasy_logs.db")
 
     conn = sqlite3.connect(db_path)
-    raw_names = _distinct_team_names(conn)
+    try:
+        raw_names = _distinct_team_names(conn)
 
-    if raw_names:
-        rows = [(name, TEAM_ABBREVIATIONS.get(normalize(name))) for name in raw_names]
-    else:
-        print(
-            "WARNING: no fantasy_logs/player_logs found; seeding canonical guesses. "
-            "Re-run seed_map_teams.py after the first data ingestion so RAW_TEAM_NAME "
-            "values match the actual data."
-        )
-        rows = _canonical_rows()
+        if raw_names:
+            rows = [(name, TEAM_ABBREVIATIONS.get(normalize(name))) for name in raw_names]
+        else:
+            print(
+                "WARNING: no fantasy_logs/player_logs found; seeding canonical guesses. "
+                "Re-run seed_map_teams.py after the first data ingestion so RAW_TEAM_NAME "
+                "values match the actual data."
+            )
+            rows = _canonical_rows()
 
-    write_map_teams(conn, rows)
-    unmatched = [r for r, abbr in rows if abbr is None]
-    print(
-        f"Wrote {len(rows)} rows to map_teams "
-        f"({len(rows) - len(unmatched)} matched, {len(unmatched)} unmatched)."
-    )
-    if unmatched:
+        try:
+            write_map_teams(conn, rows)
+        except RuntimeError as exc:
+            sys.exit(f"ERROR: {exc}")
+
+        unmatched = [r for r, abbr in rows if abbr is None]
         print(
-            "ERROR: the following raw team names have no abbreviation mapping. "
-            "Their players will be silently excluded from fantasy_averages by the "
-            "TEAM_ABBREVIATION groupby in create_summary_tables.py. "
-            "Add them to TEAM_ABBREVIATIONS in seed_map_teams.py and re-run:"
+            f"Wrote {len(rows)} rows to map_teams "
+            f"({len(rows) - len(unmatched)} matched, {len(unmatched)} unmatched)."
         )
-        for r in unmatched:
-            print(f"  - {r!r}")
+        if unmatched:
+            print(
+                "ERROR: the following raw team names have no abbreviation mapping. "
+                "Their players will be silently excluded from fantasy_averages by the "
+                "TEAM_ABBREVIATION groupby in create_summary_tables.py. "
+                "Add them to TEAM_ABBREVIATIONS in seed_map_teams.py and re-run:"
+            )
+            for r in unmatched:
+                print(f"  - {r!r}")
+            sys.exit(1)
+    finally:
         conn.close()
-        sys.exit(1)
-    conn.close()
 
 
 if __name__ == "__main__":
