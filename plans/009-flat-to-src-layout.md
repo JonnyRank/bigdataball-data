@@ -20,6 +20,7 @@
 - **Risk**: MED
 - **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of plans 003–008)
 - **Category**: tech-debt
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/32
 - **Planned at**: commit `a852503`, 2026-06-21 (refreshed for plan 005's merge `#24`; prior refreshes `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh:** plan 005 added a new `paths.py` module and consolidated every per-script `PROJECT_ROOT`/`Data/`-fallback into `paths.resolve_base_data_path()`. Consequences for this plan, all handled below: (1) there are now **15** runtime modules to move, not 14 — `paths.py` is the new one; (2) nine modules now `import paths` and must be converted to `from . import paths` (Step 2); (3) the `__file__`-based path-resolution fix (Step 3) now applies to a **single** line in `paths.py`, not nine files; (4) plan 005 added `tests/test_paths.py` (2 tests) → total test count is now **18**.
 
 ## Why this matters
