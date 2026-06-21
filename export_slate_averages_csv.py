@@ -12,9 +12,8 @@ import pandas as pd
 from sqlalchemy import create_engine
 import os
 from datetime import datetime
-import mappings
+import dk_matching
 import paths
-from thefuzz import process
 
 
 def run_slate_averages_smart_export():
@@ -25,43 +24,16 @@ def run_slate_averages_smart_export():
 
     DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
     CSV_EXPORT_DIR = os.path.join(BASE_DATA_PATH, "csv_exports")
-    DOWNLOADS_FOLDER = os.path.join(os.path.expanduser("~"), "Downloads")
-    DK_FILE_PATH = os.path.join(DOWNLOADS_FOLDER, "DKEntries.csv")
 
     # --- 2. Load DK Entries ---
-    if not os.path.exists(DK_FILE_PATH):
-        print(f"ERROR: Could not find file at {DK_FILE_PATH}")
+    DK_FILE_PATH = dk_matching.find_dk_file_path()
+    dk_names = dk_matching.load_dk_names(DK_FILE_PATH)
+    if dk_names is None:
         return
 
-    # Find the header row by looking for the specific "Position,Name + ID" signature
-    # This handles files where the header is indented or buried in instruction text
-    print(f"Reading file: {DK_FILE_PATH}")
-    header_row_index = 0
-    with open(DK_FILE_PATH, "r") as f:
-        lines = f.readlines()
-
-    for i, line in enumerate(lines[:50]):  # Check first 50 lines
-        # We look for the unique column sequence found in DK player lists
-        if "Position" in line and "Name + ID" in line:
-            header_row_index = i
-            print(f"Found header at row {i}")
-            break
+    print(f"DK File contains {len(dk_names)} unique players.")
 
     try:
-        # Load CSV using the detected header row
-        dk_df = pd.read_csv(DK_FILE_PATH, header=header_row_index)
-
-        # Verify 'Name' column exists
-        if "Name" not in dk_df.columns:
-            print("ERROR: Could not find 'Name' column. Please check CSV format.")
-            print(f"Columns found: {dk_df.columns.tolist()}")
-            return
-
-        dk_df = dk_df.dropna(subset=["Name"])
-        dk_names = dk_df["Name"].unique().tolist()
-
-        print(f"DK File contains {len(dk_names)} unique players.")
-
         # --- 3. Fetch VALID names from Database ---
         engine = create_engine(f"sqlite:///{DB_PATH}")
 
@@ -74,26 +46,9 @@ def run_slate_averages_smart_export():
 
         # --- 4. Fuzzy Match Logic ---
         print("Matching names...")
-        final_names_to_query = []
-        unmatched_names = []
-
-        for dk_name in dk_names:
-            # Check for explicit mapping before fuzzy matching
-            if dk_name in mappings.PLAYER_NAME_MAP:
-                dk_name = mappings.PLAYER_NAME_MAP[dk_name]
-
-            # Extract the best match from the DB list
-            match, score = process.extractOne(dk_name, valid_db_names)
-
-            # Threshold: 90 is usually safe for "AJ" vs "A.J." or "Smith" vs "Smith Jr."
-            if score >= 90:
-                final_names_to_query.append(match)
-                if dk_name != match:
-                    print(f"   > Mapped '{dk_name}' -> '{match}' (Score: {score})")
-            else:
-                unmatched_names.append(
-                    f"{dk_name} (Best match: {match}, Score: {score})"
-                )
+        final_names_to_query, unmatched_names = dk_matching.match_names(
+            dk_names, valid_db_names
+        )
 
         if unmatched_names:
             print(
@@ -105,15 +60,12 @@ def run_slate_averages_smart_export():
                 "----------------------------------------------------------------------------------------------\n"
             )
 
-        final_names_to_query = list(set(final_names_to_query))
         print(
             f"Identified {len(final_names_to_query)} valid database players to query."
         )
 
         # --- 5. Construct & Run Final Query ---
-        # Escape single quotes for SQL safety
-        formatted_names = [name.replace("'", "''") for name in final_names_to_query]
-        sql_names_string = "', '".join(formatted_names)
+        sql_names_string = dk_matching.to_sql_in_list(final_names_to_query)
 
         query = f"""
         SELECT 
