@@ -247,10 +247,9 @@ def test_unwanted_columns_are_dropped(fantasy_upload):
 
     mod.main()
 
-    import sqlalchemy
-    with mod.engine.connect() as conn:
-        result = conn.execute(sqlalchemy.text("PRAGMA table_info(fantasy_logs)"))
-        col_names = [row[1] for row in result]
+    from sqlalchemy import inspect
+    inspector = inspect(mod.engine)
+    col_names = [col["name"] for col in inspector.get_columns("fantasy_logs")]
     assert "FANDUEL" not in col_names
     assert "DK_POINTS" in col_names
 ```

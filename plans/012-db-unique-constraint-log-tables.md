@@ -138,7 +138,16 @@ python3 check_ingest_duplicates.py
 
 **Verify**: `python3 check_ingest_duplicates.py` → exit 0.
 
-### Step 2: Add unique index to `daily_player_upload.py:initialize_database()`
+### Step 2: Add `ensure_unique_index()` and update `daily_player_upload.py`
+
+The key insight from code review: the naive approach (index in `initialize_database()`
+only) leaves the **first run unprotected** — `initialize_database()` runs before
+`to_sql` creates the table, so the index creation is silently skipped. If any duplicate
+is inserted during that first run, the second run's index creation will then fail.
+
+The fix is an `ensure_unique_index()` helper that is called BOTH from
+`initialize_database()` (covers subsequent runs) AND immediately after each `to_sql`
+call in `main()` (covers the first-run table creation).
 
 Current `initialize_database()` (lines 33-47):
 ```python
@@ -157,55 +166,15 @@ def initialize_database():
         conn.commit()
 ```
 
-Extend it to also add a unique index on `player_logs` if the table exists:
+Replace with (add `ensure_unique_index` above, call it from `initialize_database`
+AND after `to_sql` in `main()`):
 
 ```python
-def initialize_database():
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                f"""
-            CREATE TABLE IF NOT EXISTS {PLAYERS_TABLE_NAME} (
-                "PLAYER_ID" INTEGER PRIMARY KEY,
-                "PLAYER_NAME" TEXT
-            );
-            """
-            )
-        )
-        conn.execute(
-            text(
-                f"""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_{LOGS_TABLE_NAME}_player_date
-            ON {LOGS_TABLE_NAME} ("PLAYER_ID", "DATE")
-            """
-            )
-        )
-        conn.commit()
-```
-
-Important: `CREATE UNIQUE INDEX IF NOT EXISTS` silently does nothing if the index
-already exists. If the table `player_logs` doesn't exist yet (first run), SQLite raises
-`OperationalError: no such table`. Wrap the index-creation statement in its own
-try/except so a missing table (first run) doesn't break initialization:
-
-```python
-def initialize_database():
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                f"""
-            CREATE TABLE IF NOT EXISTS {PLAYERS_TABLE_NAME} (
-                "PLAYER_ID" INTEGER PRIMARY KEY,
-                "PLAYER_NAME" TEXT
-            );
-            """
-            )
-        )
-        conn.commit()
-
-    # Add unique index on player_logs if the table already exists.
-    # Uses a separate connection/transaction so a missing table (first run,
-    # before to_sql creates it) doesn't abort the full initialization.
+def ensure_unique_index():
+    """Create the unique index on (PLAYER_ID, DATE) if the table exists.
+    Called from initialize_database() (existing tables) and after to_sql()
+    (first-run table creation), so the index is present from the very first insert.
+    """
     try:
         with engine.begin() as conn:
             conn.execute(
@@ -218,17 +187,11 @@ def initialize_database():
             )
     except Exception as e:
         if "no such table" in str(e):
-            pass  # first run; index will be added on next run after to_sql creates it
+            pass  # table not yet created; to_sql will create it, then we call this again
         else:
             raise
-```
 
-**Verify**: `python3 -m py_compile daily_player_upload.py` → exit 0.
 
-### Step 3: Add unique index to `daily_fantasy_log_upload.py:initialize_database()`
-
-The same change applies. Current `initialize_database()` is at lines 41-55:
-```python
 def initialize_database():
     with engine.connect() as conn:
         conn.execute(
@@ -242,11 +205,32 @@ def initialize_database():
             )
         )
         conn.commit()
+    ensure_unique_index()
 ```
 
-Apply the same extension as Step 2 — add the `CREATE UNIQUE INDEX` block (wrapped in
-the same "no such table" try/except) using `LOGS_TABLE_NAME` (which is `"fantasy_logs"`
-in this script).
+In `main()`, add one call to `ensure_unique_index()` immediately after the
+`truly_new_logs_df.to_sql(...)` line (currently at line ~223):
+
+```python
+                truly_new_logs_df.to_sql(
+                    LOGS_TABLE_NAME, con=engine, if_exists="append", index=False
+                )
+                ensure_unique_index()  # idempotent; creates index on first run
+```
+
+This ensures the index exists from the moment the table is first populated, not on the
+second run.
+
+**Verify**: `python3 -m py_compile daily_player_upload.py` → exit 0.
+
+### Step 3: Apply the same pattern to `daily_fantasy_log_upload.py`
+
+Add the same `ensure_unique_index()` function (using `LOGS_TABLE_NAME = "fantasy_logs"`).
+Call it from `initialize_database()` and after the `truly_new_logs_df.to_sql(...)` in
+`main()` (currently at line ~249).
+
+Current `initialize_database()` is at lines 41-55 — same structure as player_upload;
+apply the identical change.
 
 **Verify**: `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
 
@@ -258,8 +242,8 @@ Add to `tests/test_daily_player_upload.py`:
 def test_unique_index_prevents_silent_duplicate(player_upload):
     """After the first ingestion run, a second run with the same file must not insert
     duplicate rows — verified by checking the DB row count stays at 1, and the unique
-    index created by initialize_database must exist on player_logs."""
-    import sqlite3
+    index created by ensure_unique_index must exist on player_logs."""
+    from sqlalchemy import inspect
     mod = player_upload
     rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
@@ -273,12 +257,9 @@ def test_unique_index_prevents_silent_duplicate(player_upload):
     assert count_rows(mod.engine, "player_logs") == 1
 
     # The unique index must exist.
-    conn = sqlite3.connect(mod.DB_PATH)
-    try:
-        indexes = conn.execute("PRAGMA index_list(player_logs)").fetchall()
-        index_names = [idx[1] for idx in indexes]
-    finally:
-        conn.close()
+    inspector = inspect(mod.engine)
+    indexes = inspector.get_indexes("player_logs")
+    index_names = [idx["name"] for idx in indexes]
     assert any("player_date" in name for name in index_names), (
         f"Unique index not found. Indexes: {index_names}"
     )
@@ -292,19 +273,16 @@ Add to `tests/test_daily_fantasy_log_upload.py`:
 
 ```python
 def test_unique_index_exists_on_fantasy_logs(fantasy_upload):
-    """initialize_database must create a unique index on fantasy_logs after first ingest."""
-    import sqlite3
+    """ensure_unique_index must create a unique index on fantasy_logs after first ingest."""
+    from sqlalchemy import inspect
     mod = fantasy_upload
     rows = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
     write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
     mod.main()
 
-    conn = sqlite3.connect(mod.DB_PATH)
-    try:
-        indexes = conn.execute("PRAGMA index_list(fantasy_logs)").fetchall()
-        index_names = [idx[1] for idx in indexes]
-    finally:
-        conn.close()
+    inspector = inspect(mod.engine)
+    indexes = inspector.get_indexes("fantasy_logs")
+    index_names = [idx["name"] for idx in indexes]
     assert any("player_date" in name for name in index_names), (
         f"Unique index not found. Indexes: {index_names}"
     )
@@ -324,7 +302,7 @@ Two new regression tests:
 - `tests/test_daily_fantasy_log_upload.py::test_unique_index_exists_on_fantasy_logs`
   — after first ingest, the unique index exists on `fantasy_logs`.
 
-These tests verify both the index existence (direct PRAGMA check) and the correctness
+These tests verify both the index existence (via `sqlalchemy.inspect`) and the correctness
 of the dedup behavior (row count). They use the existing fixtures — no new fixtures needed.
 
 ## Done criteria
@@ -333,8 +311,8 @@ ALL must hold:
 
 - [ ] `python3 -m py_compile daily_player_upload.py daily_fantasy_log_upload.py` exits 0
 - [ ] `python3 -m pytest -q` exits 0 with 2 new tests in scope
-- [ ] On a test DB: `PRAGMA index_list(player_logs)` returns at least one index with "player_date" in the name
-- [ ] On a test DB: `PRAGMA index_list(fantasy_logs)` returns at least one index with "player_date" in the name
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name
 - [ ] No change to `check_ingest_duplicates.py` or any export script (`git diff --name-only`)
 - [ ] `plans/README.md` status row for 012 updated
 
@@ -356,15 +334,13 @@ Stop and report back (do not improvise) if:
 ## Maintenance notes
 
 - **First-run behavior**: On a brand-new installation (no DB yet), `initialize_database()`
-  silently skips the index creation. After `to_sql` creates `player_logs`/`fantasy_logs`
-  on the first insert, `initialize_database()` is NOT re-called in the same run. The
-  index will be created on the **second** run. This is acceptable — the in-memory dedup
-  remains the primary guard. If same-run index coverage is required, call
-  `initialize_database()` a second time after the first `to_sql` insert.
+  silently skips the index creation (table not yet created). The `ensure_unique_index()`
+  call immediately after `to_sql()` in `main()` covers this: the index is created from the
+  very first insert, not deferred to the second run.
 - **`check_ingest_duplicates.py --remove`** recreates the tables as temp tables and renames.
   Verify after running it that the unique indexes survive (they should, since they're
   added to the renamed table — but if the tool's internal CREATE TABLE lacks them, they'd
-  be lost). Run `PRAGMA index_list(player_logs)` after any `--remove` run.
+  be lost). Run `sqlalchemy.inspect(engine).get_indexes("player_logs")` after any `--remove` run.
 - A reviewer should confirm the try/except in `initialize_database()` catches ONLY the
   `"no such table"` error and re-raises everything else — silencing an unexpected
   OperationalError would hide real problems.
