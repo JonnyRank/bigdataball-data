@@ -121,11 +121,15 @@ line any more — verify with
   no bare module-name strings, no changes needed**.
 - `tests/test_paths.py` (added by plan 005): two tests that call `import paths`
   **inside** the test functions and reference `paths.resolve_base_data_path()` /
-  `paths.__file__`. After the move, replace `import paths` with
-  `from bigdataball import paths` in both functions (the `import paths` lines are
-  local to each test body — there are two). The `paths.__file__`-based `expected`
-  assertion keeps working because it derives `Data/` from the module's own
-  location.
+  `paths.__file__`. After the move, two edits are needed (details in Step 6):
+  (1) replace both local `import paths` lines with `from bigdataball import paths`;
+  (2) **deepen the `expected` assertion** in `test_fallback_to_local_data` to go up
+  three levels, matching Step 3's change to `paths.py`. Currently it computes
+  `expected = os.path.join(os.path.dirname(os.path.abspath(paths.__file__)), "Data")`
+  (single `dirname`). After Step 3, `resolve_base_data_path()` returns the **repo
+  root** `Data/` (triple `dirname`), so the test's single-`dirname` expected would
+  resolve to `src/bigdataball/Data` and the assertion would fail. The expected must
+  use the same triple-`dirname` so both sides point at the repo-root `Data/`.
 - `tests/helpers.py`, `tests/__init__.py` need no changes.
 - **Total test count is 18** (10 check_ingest + 4 player_upload + 1 fantasy_upload +
   1 orchestrator_warnings + 2 paths). Plan 009 adds no tests and removes none; the
@@ -373,10 +377,30 @@ Prefix them all with `bigdataball.`:
 - `sys.modules.pop("check_ingest_duplicates", None)` → `sys.modules.pop("bigdataball.check_ingest_duplicates", None)` (**both** occurrences)
 - `importlib.import_module("check_ingest_duplicates")` → `importlib.import_module("bigdataball.check_ingest_duplicates")`
 
-**`tests/test_paths.py`** (added by plan 005): each of its two test functions has
-a local `import paths` line. Change both to `from bigdataball import paths`. The
-`paths.resolve_base_data_path()` and `paths.__file__` references on the following
-lines stay unchanged — they resolve through the `paths` name either way.
+**`tests/test_paths.py`** (added by plan 005): two edits.
+
+1. Each of its two test functions has a local `import paths` line. Change both to
+   `from bigdataball import paths`.
+2. In `test_fallback_to_local_data`, the `expected` line currently reads:
+
+   ```python
+   expected = os.path.join(os.path.dirname(os.path.abspath(paths.__file__)), "Data")
+   ```
+
+   This must be deepened to **three** `dirname` calls so it matches Step 3's change
+   to `paths.resolve_base_data_path()` (which now returns the repo-root `Data/`).
+   Without this, `result` (repo-root `Data/`) ≠ `expected` (`src/bigdataball/Data`)
+   and the test fails. Replace it with:
+
+   ```python
+   expected = os.path.join(
+       os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(paths.__file__)))),
+       "Data",
+   )
+   ```
+
+   (`test_env_override_wins` needs no change beyond the import — it asserts a literal
+   override path.)
 
 Do **not** change the `sys.argv = ["check_ingest_duplicates.py", ...]` lines —
 those are the simulated program name (`argv[0]`) and have no import meaning.
