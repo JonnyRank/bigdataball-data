@@ -103,10 +103,8 @@ def test_main_derives_rows_from_fantasy_logs(tmp_path):
     finally:
         del os.environ["BIGDATABALL_DATA_DIR"]
 
+    # map_teams must not have been written — an incomplete table is worse than no table
     conn2 = sqlite3.connect(db)
-    rows = conn2.execute(
-        "SELECT RAW_TEAM_NAME, TEAM_ABBREVIATION FROM map_teams ORDER BY RAW_TEAM_NAME"
-    ).fetchall()
+    with pytest.raises(sqlite3.OperationalError):
+        conn2.execute("SELECT * FROM map_teams")
     conn2.close()
-    assert ("Boston Celtics", "BOS") in rows
-    assert ("Unknown Squad", None) in rows

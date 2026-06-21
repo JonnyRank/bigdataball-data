@@ -180,16 +180,7 @@ def main():
             )
             rows = _canonical_rows()
 
-        try:
-            write_map_teams(conn, rows)
-        except RuntimeError as exc:
-            sys.exit(f"ERROR: {exc}")
-
         unmatched = [r for r, abbr in rows if abbr is None]
-        print(
-            f"Wrote {len(rows)} rows to map_teams "
-            f"({len(rows) - len(unmatched)} matched, {len(unmatched)} unmatched)."
-        )
         if unmatched:
             print(
                 "ERROR: the following raw team names have no abbreviation mapping. "
@@ -200,6 +191,13 @@ def main():
             for r in unmatched:
                 print(f"  - {r!r}")
             sys.exit(1)
+
+        try:
+            write_map_teams(conn, rows)
+        except RuntimeError as exc:
+            sys.exit(f"ERROR: {exc}")
+
+        print(f"Wrote {len(rows)} rows to map_teams (all matched).")
     finally:
         conn.close()
 
