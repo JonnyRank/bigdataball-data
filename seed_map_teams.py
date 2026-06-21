@@ -14,6 +14,7 @@ hand-curated mappings.  Set BIGDATABALL_SEED_FORCE=1 to replace it:
 
 import os
 import sqlite3
+import sys
 
 # ---------------------------------------------------------------------------
 # Abbreviation lookup
@@ -186,9 +187,16 @@ def main():
         f"({len(rows) - len(unmatched)} matched, {len(unmatched)} unmatched)."
     )
     if unmatched:
-        print("UNMATCHED raw team names (add them to TEAM_ABBREVIATIONS in seed_map_teams.py):")
+        print(
+            "ERROR: the following raw team names have no abbreviation mapping. "
+            "Their players will be silently excluded from fantasy_averages by the "
+            "TEAM_ABBREVIATION groupby in create_summary_tables.py. "
+            "Add them to TEAM_ABBREVIATIONS in seed_map_teams.py and re-run:"
+        )
         for r in unmatched:
             print(f"  - {r!r}")
+        conn.close()
+        sys.exit(1)
     conn.close()
 
 
