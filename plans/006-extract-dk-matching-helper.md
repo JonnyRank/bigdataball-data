@@ -39,7 +39,7 @@ The near-identical code appears in:
 
 The shared logic, from `export_slate_averages_vw.py`:
 
-Header detection (lines 36-43):
+Header detection (lines 35-42):
 ```python
     header_row_index = 0
     with open(DK_FILE_PATH, "r") as f:
