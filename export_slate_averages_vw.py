@@ -110,7 +110,7 @@ def run_slate_averages_pipeline():
         view_name_l30 = "vw_daily_slate_l30"
         drop_view_l30_sql = f"DROP VIEW IF EXISTS {view_name_l30}"
 
-        # This new view includes L30FPPM and is filtered to only the 2025-26 season.
+        # This new view includes L30FPPM and is filtered to the current L30 season (seasons.L30_SEASON).
         create_view_l30_sql = f"""
         CREATE VIEW {view_name_l30} AS
         SELECT
