@@ -502,6 +502,15 @@ python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = 
 `ImportError`/`ModuleNotFoundError`, a relative import in Step 2 was missed —
 fix it and re-run.
 
+> **Note — `seed_map_teams`'s lazy import is NOT covered by this smoke test.**
+> Importing `seed_map_teams` does not execute the `from . import paths` line,
+> because it lives inside `main()` (Step 2), not at module top. So a bad
+> conversion there would still pass this step. The real guard is
+> `tests/test_seed_map_teams.py::test_main_derives_rows_from_fantasy_logs`
+> (`tests/test_seed_map_teams.py:99`), which actually calls `seed_map_teams.main()`
+> and therefore exercises the relative import — it runs in Step 8's `pytest`. Don't
+> over-trust this smoke step for that one module.
+
 ### Step 8: Run the full test suite
 
 **Verify**: `python -m pytest -q` → all **38 tests** pass, exit 0 (10
