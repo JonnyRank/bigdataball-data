@@ -86,7 +86,7 @@ def write_map_teams(conn, rows, force=None):
     otherwise.
     """
     if force is None:
-        force = bool(os.environ.get("BIGDATABALL_SEED_FORCE"))
+        force = os.environ.get("BIGDATABALL_SEED_FORCE") in ("1", "true", "True")
     if _map_teams_row_count(conn) > 0 and not force:
         raise RuntimeError(
             "map_teams already has rows; refusing to overwrite. "
