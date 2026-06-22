@@ -85,7 +85,7 @@ def test_canonical_rows_yields_30_unique_abbreviations():
     assert len(rows) == 30
 
 
-def test_main_derives_rows_from_fantasy_logs(tmp_path):
+def test_main_derives_rows_from_fantasy_logs(tmp_path, monkeypatch):
     db = tmp_path / "nba_fantasy_logs.db"  # main() always opens this filename
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE fantasy_logs (TEAM TEXT)")
@@ -94,14 +94,11 @@ def test_main_derives_rows_from_fantasy_logs(tmp_path):
     conn.commit()
     conn.close()
 
-    os.environ["BIGDATABALL_DATA_DIR"] = str(tmp_path)
-    try:
-        # main() should exit 1 due to the unmatched team
-        with pytest.raises(SystemExit) as exc_info:
-            seed_map_teams.main()
-        assert exc_info.value.code == 1
-    finally:
-        del os.environ["BIGDATABALL_DATA_DIR"]
+    monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(tmp_path))
+    # main() should exit 1 due to the unmatched team
+    with pytest.raises(SystemExit) as exc_info:
+        seed_map_teams.main()
+    assert exc_info.value.code == 1
 
     # map_teams must not have been written — an incomplete table is worse than no table
     conn2 = sqlite3.connect(db)
