@@ -18,7 +18,7 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of plans 003–008)
+- **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of the still-open plans 010–012; 003–008 are already merged)
 - **Category**: tech-debt
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/32
 - **Planned at**: commit `c2f810f`, 2026-06-22 (refreshed for the merges of plans 006/007/008; prior bases `a852503` 2026-06-21 for plan 005's merge `#24`, `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh (2026-06-22):** plans 006/007/008 merged three new runtime modules — `dk_matching.py` (plan 006, `import mappings`), `seasons.py` (plan 007, no internal imports), and `seed_map_teams.py` (plan 008, a **lazy** `import paths` inside `main()`). Consequences for this plan, all handled below: (1) there are now **18** runtime modules to move, not 15; (2) the three export scripts no longer `import mappings` — they now `import dk_matching` and `import seasons` (Step 2 entries corrected); (3) `seed_map_teams.py` has a **second** `__file__`-based `Data/` fallback (line 166) inside its `except` branch, so Step 3 now deepens **two** files, not one; (4) plans 006/007/008 also added three test files (`test_dk_matching` 8, `test_seasons` 3, `test_seed_map_teams` 9) that `import` their module **at top level** and must be converted to `from bigdataball import <module>` (Step 6) → total test count is now **38**, not 18.
@@ -33,11 +33,12 @@ tests at the repo root, lets tests accidentally import from the working
 directory instead of an installed package, and has no single packaging
 manifest. Moving to the standard **src layout** (`src/bigdataball/`) with a
 `pyproject.toml` gives the project one installable package, a clean import
-namespace, and a foundation for the later refactors (plans 005–008). This plan
-is deliberately the **minimum** mechanical move: create the folder, move the
-files, fix the imports and the one `__file__`-based path that breaks when files
-move deeper, add `pyproject.toml`, and update the test/CI wiring. No logic
-changes, no API changes, no new behavior.
+namespace, and a clean foundation for further work (plans 005–008, all of which
+are already DONE and merged, were built on the flat layout; this move tidies up
+after them). This plan is deliberately the **minimum** mechanical move: create the
+folder, move the files, fix the imports and the two `__file__`-based paths that
+break when files move deeper, add `pyproject.toml`, and update the test/CI wiring.
+No logic changes, no API changes, no new behavior.
 
 ## Current state
 
@@ -212,6 +213,9 @@ unchanged — only the import line changes, never the call sites.
   the tables above)
 - Edit the documentation command blocks in `CLAUDE.md` and
   `.github/copilot-instructions.md` (Step 9 — command snippets only)
+- Edit the in-code usage strings inside `src/bigdataball/check_ingest_duplicates.py`
+  (Step 9 — the module-docstring `Usage` block and the "rebuild derived data next"
+  print block; string/comment literals only, no logic)
 - Update `plans/README.md` status row (final step)
 
 **Out of scope** (do NOT touch, even though they look related):
@@ -242,7 +246,7 @@ unchanged — only the import line changes, never the call sites.
 
 ### Step 1: Create the package directory and move the modules
 
-Create `src/bigdataball/` and `git mv` all 15 in-scope modules into it. Then
+Create `src/bigdataball/` and `git mv` all 18 in-scope modules into it. Then
 create an empty `src/bigdataball/__init__.py`.
 
 ```bash
@@ -543,7 +547,16 @@ Also update the in-code "rebuild derived data next" message in
 the on-screen instruction stays accurate. This is a string-literal edit only; do
 not change surrounding logic.
 
-**Verify**: `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` → **no matches** (all converted to `python -m bigdataball.`). `python -m pytest -q` still passes.
+Also update the **module docstring usage block** at the top of
+`src/bigdataball/check_ingest_duplicates.py` (the `Usage` section, currently lines
+24–25, 29, and 66–69). These are the same kind of `python <module>.py` examples
+and will be stale after the move. Rewrite each to the `-m` form, e.g.
+`python check_ingest_duplicates.py --remove` → `python -m bigdataball.check_ingest_duplicates --remove`,
+and `python create_summary_tables.py` → `python -m bigdataball.create_summary_tables`
+(and the same for the three export modules listed there). String-literal/comment
+edit only; do not change any logic.
+
+**Verify**: `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md src/bigdataball/check_ingest_duplicates.py` → **no matches** (all converted to `python -m bigdataball.`; this includes the `check_ingest_duplicates.py` docstring usage block). `python -m pytest -q` still passes.
 
 ### Step 10: Wire the editable install into CI
 
@@ -586,7 +599,7 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -rln "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/` lists exactly two files, `src/bigdataball/paths.py` and `src/bigdataball/seed_map_teams.py` (both `Data/`-fallback path-resolutions, deepened per Step 3).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
 - [ ] `python -m pytest -q` exits 0 with exactly 38 tests passing.
-- [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md` returns no matches.
+- [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md src/bigdataball/check_ingest_duplicates.py` returns no matches (docs **and** the `check_ingest_duplicates.py` docstring usage block all converted to `python -m bigdataball.`).
 - [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
 - [ ] `plans/README.md` status row for 009 updated to DONE.
@@ -614,18 +627,22 @@ Stop and report back (do not improvise) if:
 
 For the human/agent who owns this code after the change lands:
 
-- **This plan rebases the file paths of every other plan.** Plans 003–008 in
-  `plans/` reference root-level files (e.g. `daily_fantasy_log_upload.py`).
-  After 009 lands, those same files live at `src/bigdataball/...`. Their logic,
-  line numbers, and excerpts are otherwise unaffected (009 only moves files and
-  changes import lines + the `PROJECT_ROOT` expression). When executing 003–008
-  next, prepend `src/bigdataball/` to their in-scope paths. The `plans/README.md`
-  dependency notes have been updated to flag this.
-- **Plan 005 (centralize data-path resolution) supersedes Step 3's fix.** When
-  005's `paths.resolve_base_data_path()` is introduced, it must compute the repo
-  root from `src/bigdataball/` depth (three `dirname()` levels), and the
-  per-file `PROJECT_ROOT` triple-`dirname` expressions added here get replaced by
-  calls into that module. Don't leave both.
+- **This plan rebases the file paths of every still-open plan.** Plans 003–008 are
+  already DONE and merged, so the only remaining ones this affects are **010–012**,
+  which reference root-level files (e.g. `daily_fantasy_log_upload.py`,
+  `create_summary_tables.py`, `daily_player_upload.py`). After 009 lands, those same
+  files live at `src/bigdataball/...`. Their logic, line numbers, and excerpts are
+  otherwise unaffected (009 only moves files and changes import lines + the
+  `__file__`-fallback expressions). When executing 010–012 next, prepend
+  `src/bigdataball/` to their in-scope paths. The `plans/README.md` dependency notes
+  flag this.
+- **Plan 005 is already DONE and merged (`#24`).** `paths.resolve_base_data_path()`
+  already exists and is the single owner of the `Data/` fallback — Step 3 does not
+  introduce it, it just *deepens* the `__file__`-relative resolution inside that
+  existing function (three `dirname()` levels) so it still points at the repo root
+  from the new `src/bigdataball/` depth. The second copy in `seed_map_teams.py`'s
+  `except` branch is deepened the same way. There is no per-file `PROJECT_ROOT` to
+  reconcile any more — 005 already removed those.
 - **Console scripts were intentionally deferred.** If you add `[project.scripts]`
   later, wrap any `main()` that returns a non-int (notably
   `daily_player_upload.main()`, which returns a `(processed, overwritten)` tuple)
