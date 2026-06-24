@@ -64,6 +64,10 @@ python -m pytest -q                      # full suite
 
 CI runs `pytest -q` on every push/PR. See `docs/codebase/TESTING.md` for coverage details and gaps. Untested scripts (`daily_fantasy_log_upload.py`, summary, exports) are best verified by reading console output and inspecting the DB directly.
 
+## Claude Code on the Web
+
+Remote (web) sessions auto-install dependencies via a `SessionStart` hook (`.claude/hooks/session-start.sh`, wired in `.claude/settings.json`). The hook only fires when `CLAUDE_CODE_REMOTE=true`; it creates/reuses a repo-local `.venv`, installs `requirements.txt` + `requirements-dev.txt`, and prepends `.venv/bin` to `PATH` for the rest of the session, so `python` and `pytest` resolve to the venv. It is a no-op locally — manage your own environment there. No interactive Google Drive auth and no DB are available in web sessions, so pipeline stages that need source data can't run; `pytest` can.
+
 ## Documentation
 
 When updating project guidance, prefer editing the specific doc in `docs/codebase/` over expanding this file.
