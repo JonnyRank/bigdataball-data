@@ -66,11 +66,7 @@ CI runs `pytest -q` on every push/PR. See `docs/codebase/TESTING.md` for coverag
 
 ## Claude Code on the Web
 
-Remote (web) sessions auto-install dependencies via a `SessionStart` hook (`.claude/hooks/session-start.sh`, wired in `.claude/settings.json`).
-
-- **Activation** — the hook only fires when `CLAUDE_CODE_REMOTE=true`. It is a no-op locally (manage your own environment there).
-- **Environment setup** — it creates/reuses a repo-local `.venv`, installs `requirements.txt` + `requirements-dev.txt`, and prepends `.venv/bin` to `PATH` so `python` and `pytest` resolve to the venv.
-- **Limitations** — no interactive Google Drive auth and no DB are available in web sessions, so pipeline stages that need source data can't run; `pytest` can.
+Remote (web) sessions auto-install dependencies via a `SessionStart` hook (`.claude/hooks/session-start.sh`, wired in `.claude/settings.json`) — remote-only (`CLAUDE_CODE_REMOTE`), no-op locally. It bootstraps a repo-local `.venv` so `python`/`pytest` work; pipeline stages that need Drive auth or the DB still can't run in web sessions. See `docs/codebase/INTEGRATIONS.md` for details.
 
 ## Documentation
 
