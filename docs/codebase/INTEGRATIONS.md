@@ -46,6 +46,7 @@ No `.env.example`/`.env.template` is committed; required vars are read in `confi
   - `test.yml` — installs deps, runs `pytest -q` on push to `main` and on PRs (ubuntu, Python 3.11).
   - `claude.yml`, `claude-auto-pr-review.yml` — Claude Code GitHub Action workflows (tooling, not pipeline).
 - The daily pipeline is triggered by **Windows Task Scheduler** on the maintainer's machine (runs `daily_fantasy_log_upload.py`). This is host-side configuration, not committed to the repo — the scheduled task relies on a pre-existing valid `token.json` so the OAuth step doesn't block.
+- **Claude Code on the web** auto-bootstraps a project-local `.venv` (installing `requirements.txt` + `requirements-dev.txt`) via the `SessionStart` hook in `.claude/hooks/session-start.sh`, registered in `.claude/settings.json`. It is remote-only (guards on `CLAUDE_CODE_REMOTE`), so local sessions are untouched. Network access stays at the default **Trusted** level (PyPI is allowlisted); no environment variables or secrets are required to run the test suite, which stubs the Google/SMTP integrations.
 
 ## Monitoring / Logging
 
