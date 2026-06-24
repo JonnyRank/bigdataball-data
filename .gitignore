@@ -7,6 +7,7 @@ token.json
 
 # Virtual Environment: Never commit this folder
 venv/
+.venv/
 
 # Python cache files
 __pycache__/
