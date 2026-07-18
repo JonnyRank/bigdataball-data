@@ -78,10 +78,11 @@ def main():
     print("\n=== STARTING PIPELINE: PLAYER LOGS ===")
     player_logs_count = 0
     player_logs_overwritten = 0
+    absence_rows_count = 0
     try:
         result = daily_player_upload.main()
         if isinstance(result, tuple):
-            player_logs_count, player_logs_overwritten = result
+            player_logs_count, player_logs_overwritten, absence_rows_count = result
         else:
             player_logs_count = result or 0
     except Exception as e:
@@ -348,7 +349,8 @@ def main():
         body = (
             "The daily ingestion pipeline completed successfully with no errors.\n\n"
             f"Player Logs Processed: {player_logs_count} (Overwritten: {player_logs_overwritten})\n"
-            f"Fantasy Logs Processed: {fantasy_logs_count} (Overwritten: {fantasy_logs_overwritten})"
+            f"Fantasy Logs Processed: {fantasy_logs_count} (Overwritten: {fantasy_logs_overwritten})\n"
+            f"Absence Rows Processed: {absence_rows_count}"
         )
 
         if unmatched_dk_players:

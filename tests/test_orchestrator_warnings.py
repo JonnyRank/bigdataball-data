@@ -8,7 +8,7 @@ def test_unmatched_uses_regular_season_not_playoffs(fantasy_upload, monkeypatch)
     sent = {}
 
     # Stub heavy stages not already handled by the fantasy_upload fixture.
-    monkeypatch.setattr(mod.daily_player_upload, "main", lambda: (0, 0))
+    monkeypatch.setattr(mod.daily_player_upload, "main", lambda: (0, 0, 0))
     monkeypatch.setattr(mod.create_summary_tables, "run_summary_pipeline", lambda: None)
     monkeypatch.setattr(
         mod.export_slate_averages_csv, "run_slate_averages_smart_export", lambda: None

@@ -8,6 +8,8 @@ Flat layout — all Python modules live at the repo root (no `src/` package). A 
 bigdataball-data/
 ├── daily_fantasy_log_upload.py     # MAIN orchestrator (despite the name)
 ├── daily_player_upload.py          # ingest player box-score logs
+├── absence_ingestion.py            # shared: DNP-DND-NWT sheet → player_absences (+ learn dim_players)
+├── backfill_player_absences.py     # one-shot CLI: backfill player_absences from archived files
 ├── drive_ingestion.py              # download latest .xlsx from Google Drive
 ├── auth_manager.py                 # 3-legged Google OAuth helper
 ├── config.py                       # paths, Drive job defs, email settings (loads .env)
@@ -44,7 +46,8 @@ All scripts are runnable directly (`python <script>.py`) and importable. There i
 | Entry point | Role |
 |-------------|------|
 | `daily_fantasy_log_upload.py` `main()` | **Primary orchestrator.** Runs the full pipeline: Drive ingestion → player upload → fantasy upload → summary tables → slate views (regular + playoffs) → CSV export → email. |
-| `daily_player_upload.py` `main()` | Player box-score ingestion (called by orchestrator; returns `(processed, overwritten)`). |
+| `daily_player_upload.py` `main()` | Player box-score ingestion (called by orchestrator; returns `(processed, overwritten, absences_count)`). Also ingests the `DNP-DND-NWT` absence sheet per file via `absence_ingestion.py`. |
+| `backfill_player_absences.py` (CLI) | One-shot backfill of `player_absences` from already-archived player-feed files; reads files in place, does not move/archive them. |
 | `drive_ingestion.py` `main()` | Downloads latest matched `.xlsx` from each configured Drive folder. |
 | `create_summary_tables.py` `run_summary_pipeline()` | Rebuilds `fantasy_averages` + convenience views + CSVs. |
 | `export_slate_averages_vw.py` `run_slate_averages_pipeline()` | Builds `vw_daily_slate`, `vw_daily_slate_l30`. Returns unmatched DK names. |

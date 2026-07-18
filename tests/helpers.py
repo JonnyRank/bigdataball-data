@@ -40,3 +40,55 @@ def make_rows(specs):
 def make_fantasy_rows(specs):
     """specs: list of (player_id, player_name, date) tuples."""
     return [{"PLAYER_ID": pid, "PLAYER": name, "DATE": date} for pid, name, date in specs]
+
+
+def write_player_xlsx_with_absences(path, player_rows, absence_rows):
+    """Writes a two-sheet workbook shaped like the real BigDataBall player
+    feed: a box-score sheet ("NBA-PLAYER") first, and the "DNP-DND-NWT"
+    absence sheet second.
+
+    player_rows: list of dicts with keys GAME-ID, PLAYER_ID, PLAYER, DATE,
+    PTS. "GAME-ID" may be omitted (stored as a missing/None value) for rows
+    that don't need to participate in the absence conflict filter.
+
+    absence_rows: list of dicts using the raw feed headers -- GAME DATE,
+    GAME-ID, TEAM, OPPONENT, PLAYER-ID, PLAYER NAME, STATUS, REASON. Use
+    make_absence_rows() to build these from tuples.
+    """
+    box_cols = ["GAME-ID", "PLAYER_ID", "PLAYER", "DATE", "PTS"]
+    box_df = pd.DataFrame(player_rows, columns=box_cols)
+
+    absence_cols = [
+        "GAME DATE",
+        "GAME-ID",
+        "TEAM",
+        "OPPONENT",
+        "PLAYER-ID",
+        "PLAYER NAME",
+        "STATUS",
+        "REASON",
+    ]
+    absence_df = pd.DataFrame(absence_rows, columns=absence_cols)
+
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        box_df.to_excel(writer, sheet_name="NBA-PLAYER", index=False)
+        absence_df.to_excel(writer, sheet_name="DNP-DND-NWT", index=False)
+
+
+def make_absence_rows(specs):
+    """specs: list of (game_date, game_id, team, opponent, player_id,
+    player_name, status, reason) tuples -> raw-feed-header dicts consumable
+    by write_player_xlsx_with_absences."""
+    return [
+        {
+            "GAME DATE": game_date,
+            "GAME-ID": game_id,
+            "TEAM": team,
+            "OPPONENT": opponent,
+            "PLAYER-ID": player_id,
+            "PLAYER NAME": player_name,
+            "STATUS": status,
+            "REASON": reason,
+        }
+        for game_date, game_id, team, opponent, player_id, player_name, status, reason in specs
+    ]

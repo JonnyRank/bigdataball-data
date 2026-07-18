@@ -14,9 +14,10 @@ Google Drive (.xlsx)
    ▼
 Daily_Fantasy_Logs/  &  Daily_Player_Logs/   (input drop folders)
    │  daily_player_upload.main()       # box scores → player_logs (+ learn dim_players)
+   │    └─ absence_ingestion.ingest_absences()  # DNP-DND-NWT sheet → player_absences (+ learn dim_players)
    │  daily_fantasy_log_upload (inline loop)  # DFS logs → fantasy_logs (+ dim_players)
    ▼
-SQLite: player_logs, fantasy_logs, dim_players
+SQLite: player_logs, fantasy_logs, dim_players, player_absences
    │  create_summary_tables.run_summary_pipeline()
    ▼
 fantasy_averages  +  vw_player_averages_regular_season / _playoffs
@@ -35,7 +36,7 @@ After ingestion, processed `.xlsx` files are moved to `Archived_*` folders via `
 There are no formal layers (no domain/data/service split). Functional groupings:
 
 1. **Acquisition** — `auth_manager.py` (OAuth) + `drive_ingestion.py` (Drive list/download) + `config.py` (job definitions).
-2. **Ingestion / ETL** — `daily_player_upload.py` and the inline loop in `daily_fantasy_log_upload.py`. Read Excel → sanitize headers → rename → standardize names (`mappings.py`) → dedup → `to_sql(append)`.
+2. **Ingestion / ETL** — `daily_player_upload.py` and the inline loop in `daily_fantasy_log_upload.py`. Read Excel → sanitize headers → rename → standardize names (`mappings.py`) → dedup → `to_sql(append)`. `absence_ingestion.py` is a shared module (no module-level path/engine — receives an injected `engine`) that reads the same player-feed file's second sheet (`DNP-DND-NWT`) into `player_absences`; it's called from `daily_player_upload.py:main()` after box scores are loaded for that file, and also from the standalone one-shot backfill CLI `backfill_player_absences.py` (reads already-archived files in place, does not move them).
 3. **Aggregation** — `create_summary_tables.py`: joins logs with `dim_players` + `map_teams`, derives `SEASON_TYPE`/`SEASON_KEY`, aggregates to `fantasy_averages`, builds player-average views.
 4. **Slate selection / export** — the three `export_*` scripts: read `~/Downloads/DKEntries.csv`, fuzzy-match DK names to DB, build slate views / CSVs scoped to the current slate.
 5. **Maintenance** — `check_ingest_duplicates.py` (dedup safety net), `run_db_patch.py` / `verify_db_patch.py` (retroactive name fixes).
@@ -59,7 +60,7 @@ There are no formal layers (no domain/data/service split). Functional groupings:
 
 ## Database Schema
 
-Tables: `fantasy_logs`, `player_logs` (raw logs, no PK/UNIQUE), `dim_players` (`PLAYER_ID` PK), `fantasy_averages` (rebuilt `if_exists="replace"`), `map_teams` (`RAW_TEAM_NAME` PK → `TEAM_ABBREVIATION`).
+Tables: `fantasy_logs`, `player_logs` (raw logs, no PK/UNIQUE), `dim_players` (`PLAYER_ID` PK), `fantasy_averages` (rebuilt `if_exists="replace"`), `map_teams` (`RAW_TEAM_NAME` PK → `TEAM_ABBREVIATION`), `player_absences` (raw, no PK/UNIQUE — one row per player per missed game from the player-feed's `DNP-DND-NWT` sheet; columns `GAME_DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER_NAME`, `STATUS`, `REASON`, and derived `ABSENCE_TYPE` — `'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`. Conflict policy: **box score wins at ingest** — a row is skipped if `player_logs` already has a box score for the same `(PLAYER_ID, GAME_ID)`; 5 such rows are known to exist in the 2025-26 season. Populated by `absence_ingestion.py`, called from `daily_player_upload.py` and `backfill_player_absences.py`).
 
 Views: `vw_player_averages_regular_season`, `vw_player_averages_playoffs` (built by summary), `vw_daily_slate`, `vw_daily_slate_l30`, `vw_daily_slate_playoffs` (built by exports).
 
@@ -73,6 +74,8 @@ Views: `vw_player_averages_regular_season`, `vw_player_averages_playoffs` (built
 
 - `daily_fantasy_log_upload.py:69-395` (orchestration, try/except per stage)
 - `daily_player_upload.py:71-244` (dedup `log_key` flow, `to_sql(append)`)
+- `absence_ingestion.py` (DNP-DND-NWT sheet → `player_absences`, box-score-wins conflict filter, dim_players learning)
+- `backfill_player_absences.py` (one-shot CLI reusing `absence_ingestion.py` against archived files, no move/archive)
 - `create_summary_tables.py:40-301` (table existence guard, joins, aggregation)
 - `export_slate_averages_vw.py:37-185` (DK header detect, fuzzy match ≥90, view DROP/CREATE)
 - `check_ingest_duplicates.py:1-70` (docstring describing the dedup bug + safety net)

@@ -9,7 +9,9 @@ This is an **NBA daily fantasy sports (DFS) data pipeline** built in Python. It 
 | File | Purpose |
 |---|---|
 | `daily_fantasy_log_upload.py` | **Main entry point / orchestrator.** Runs the full pipeline: Drive ingestion → player log upload → fantasy log upload → summary tables → slate views → CSV exports → email notification. |
-| `daily_player_upload.py` | Ingests player box-score `.xlsx` files into the `player_logs` table. De-duplicates against existing data. |
+| `daily_player_upload.py` | Ingests player box-score `.xlsx` files into the `player_logs` table. De-duplicates against existing data. Also ingests each file's `DNP-DND-NWT` sheet into `player_absences` via `absence_ingestion.py`. |
+| `absence_ingestion.py` | Shared module: reads the `DNP-DND-NWT` sheet from a player-feed `.xlsx` into `player_absences`, learning unknown players into `dim_players`. Used by both `daily_player_upload.py` and `backfill_player_absences.py`. |
+| `backfill_player_absences.py` | One-shot CLI to backfill `player_absences` from already-archived player-feed files (reads in place, does not archive). |
 | `drive_ingestion.py` | Downloads latest `.xlsx` files from Google Drive shared folders using the Drive API v3. |
 | `auth_manager.py` | Google OAuth 2.0 authentication (3-legged flow with `client_secrets.json` / `token.json`). |
 | `config.py` | Central configuration: Google Drive folder IDs, file paths, credential paths, email settings. Reads secrets from `.env`. |
@@ -43,6 +45,7 @@ The SQLite database (`nba_fantasy_logs.db`) contains:
 - **`dim_players`** — Player dimension table (`PLAYER_ID` INTEGER PK, `PLAYER_NAME` TEXT).
 - **`map_teams`** — Team name mapping table (`RAW_TEAM_NAME` → `TEAM_ABBREVIATION`). Not created by these scripts (manually managed).
 - **`fantasy_averages`** — Aggregated averages per player/season/team, computed by `create_summary_tables.py`.
+- **`player_absences`** — Raw absence log, one row per player per missed game, from the player-feed's `DNP-DND-NWT` sheet. Columns: `GAME_DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER_NAME`, `STATUS`, `REASON`, and derived `ABSENCE_TYPE` (`'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`). Conflict policy: box score wins — a row is skipped at ingest if `player_logs` already has a box score for the same `(PLAYER_ID, GAME_ID)` (5 such rows known in 2025-26). Populated by `absence_ingestion.py`.
 
 ### Views
 - `vw_player_averages_regular_season` — Regular season averages from `fantasy_averages`.
@@ -105,7 +108,8 @@ python daily_fantasy_log_upload.py
 
 Individual scripts can also be run standalone:
 ```bash
-python daily_player_upload.py          # Just player box-score ingestion
+python daily_player_upload.py          # Just player box-score ingestion (+ DNP-DND-NWT absences)
+python backfill_player_absences.py <file...>  # One-shot backfill of player_absences from archived files
 python drive_ingestion.py              # Just Google Drive download
 python create_summary_tables.py        # Just rebuild averages + views
 python export_slate_averages_vw.py     # Just rebuild slate views

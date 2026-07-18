@@ -14,7 +14,7 @@ def test_single_file_loads_logs_and_learns_players(player_upload):
     ])
     write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
 
-    processed, overwritten = mod.main()
+    processed, overwritten, absences = mod.main()
 
     assert processed == 1
     assert count_rows(mod.engine, "player_logs") == 3      # all three game logs inserted
