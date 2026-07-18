@@ -13,6 +13,16 @@
 > `str(REASON).strip().upper()` against `COACH'S DECISION` (raw `REASON` is
 > stored unchanged), so case/whitespace variants cannot silently
 > miscategorize — design decision 5's exact-string comparison is superseded.
+>
+> **Post-merge correction (2026-07-18)**: the plan (and initial
+> implementation) kept the sanitized sheet headers `GAME_DATE` and
+> `PLAYER_NAME` as the table's column names. That breaks the repo-wide
+> log-table convention — `player_logs`/`fantasy_logs` use `DATE` and
+> `PLAYER` — and made `check_ingest_duplicates.py` silently report bogus
+> duplicates (SQLite treats an unresolvable double-quoted identifier as a
+> string literal). `absence_ingestion.py` now renames both at ingest, and
+> `patch_absence_column_names.py` migrated the already-populated table.
+> Read `GAME_DATE`/`PLAYER_NAME` below as `DATE`/`PLAYER`.
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the

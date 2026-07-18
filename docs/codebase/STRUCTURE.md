@@ -10,6 +10,7 @@ bigdataball-data/
 ├── daily_player_upload.py          # ingest player box-score logs
 ├── absence_ingestion.py            # shared: DNP-DND-NWT sheet → player_absences (+ learn dim_players)
 ├── backfill_player_absences.py     # one-shot CLI: backfill player_absences from archived files
+├── patch_absence_column_names.py   # one-time: rename player_absences GAME_DATE/PLAYER_NAME → DATE/PLAYER
 ├── drive_ingestion.py              # download latest .xlsx from Google Drive
 ├── auth_manager.py                 # 3-legged Google OAuth helper
 ├── config.py                       # paths, Drive job defs, email settings (loads .env)

@@ -14,17 +14,25 @@ PLAYERS_TABLE_NAME = "dim_players"
 ABSENCE_SHEET_NAME = "DNP-DND-NWT"
 DNP_CD_REASON = "COACH'S DECISION"
 
-# Column names expected after header sanitization (see _sanitize_columns).
-# Applying the sanitizer to the raw feed headers (GAME DATE, GAME-ID, TEAM,
-# OPPONENT, PLAYER-ID, PLAYER NAME, STATUS, REASON) yields exactly these
-# names -- no separate rename dict is needed.
+# The sanitizer (see _sanitize_columns) turns the raw feed headers
+# (GAME DATE, GAME-ID, TEAM, OPPONENT, PLAYER-ID, PLAYER NAME, STATUS,
+# REASON) into GAME_DATE / PLAYER_NAME / etc. Those two differ from the
+# repo-wide log-table convention (player_logs / fantasy_logs use DATE and
+# PLAYER), so they are renamed to match -- every table keyed per player per
+# game shares the same column names.
+RENAME_MAP = {
+    "GAME_DATE": "DATE",
+    "PLAYER_NAME": "PLAYER",
+}
+
+# Column names expected after sanitization + renaming.
 EXPECTED_COLUMNS = [
-    "GAME_DATE",
+    "DATE",
     "GAME_ID",
     "TEAM",
     "OPPONENT",
     "PLAYER_ID",
-    "PLAYER_NAME",
+    "PLAYER",
     "STATUS",
     "REASON",
 ]
@@ -94,27 +102,29 @@ def ingest_absences(file_path, engine, existing_keys):
 
     df = df.dropna(how="all").copy()
 
-    # --- Sanitize headers (same snippet as daily_player_upload.py) ---
+    # --- Sanitize headers (same snippet as daily_player_upload.py), then
+    # rename to the repo-wide log-table convention (DATE, PLAYER) ---
     df.columns = _sanitize_columns(df.columns)
+    df.rename(columns=RENAME_MAP, inplace=True)
 
     missing = [c for c in EXPECTED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(
             f"'{ABSENCE_SHEET_NAME}' sheet in {file_path} is missing expected "
-            f"column(s) {missing} after sanitization; found {list(df.columns)}."
+            f"column(s) {missing} after sanitization/renaming; found {list(df.columns)}."
         )
 
     # --- Normalizations ---
-    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"]).dt.strftime("%Y-%m-%d")
+    df["DATE"] = pd.to_datetime(df["DATE"]).dt.strftime("%Y-%m-%d")
     df["GAME_ID"] = df["GAME_ID"].astype(int)
     df["PLAYER_ID"] = df["PLAYER_ID"].astype(int)
 
-    changed_mask = df["PLAYER_NAME"].isin(mappings.PLAYER_NAME_MAP)
+    changed_mask = df["PLAYER"].isin(mappings.PLAYER_NAME_MAP)
     if changed_mask.any():
         print(
-            f"  > Standardizing absence player names: {df.loc[changed_mask, 'PLAYER_NAME'].unique().tolist()}"
+            f"  > Standardizing absence player names: {df.loc[changed_mask, 'PLAYER'].unique().tolist()}"
         )
-    df["PLAYER_NAME"] = df["PLAYER_NAME"].replace(mappings.PLAYER_NAME_MAP)
+    df["PLAYER"] = df["PLAYER"].replace(mappings.PLAYER_NAME_MAP)
 
     # --- Derived column ---
     # Normalize case/whitespace before comparing so a feed variant like
@@ -142,7 +152,7 @@ def ingest_absences(file_path, engine, existing_keys):
         return 0, True
 
     # --- Learn new players into dim_players (same pattern as daily_player_upload) ---
-    new_players_df = truly_new_df[["PLAYER_ID", "PLAYER_NAME"]].drop_duplicates(
+    new_players_df = truly_new_df[["PLAYER_ID", "PLAYER"]].drop_duplicates(
         subset=["PLAYER_ID"]
     )
     existing_players_df = pd.read_sql(
@@ -156,20 +166,20 @@ def ingest_absences(file_path, engine, existing_keys):
         print(
             f"  > Adding {len(truly_new_players_df)} new player(s) to {PLAYERS_TABLE_NAME} from absences..."
         )
-        # Column is already named PLAYER_NAME -- no rename needed here.
-        truly_new_players_df.to_sql(
+        # dim_players uses PLAYER_NAME (same rename as daily_player_upload).
+        truly_new_players_df.rename(columns={"PLAYER": "PLAYER_NAME"}).to_sql(
             PLAYERS_TABLE_NAME, con=engine, if_exists="append", index=False
         )
 
     # --- Append surviving rows to player_absences ---
     insert_df = truly_new_df.drop(columns=["absence_key"])[
         [
-            "GAME_DATE",
+            "DATE",
             "GAME_ID",
             "TEAM",
             "OPPONENT",
             "PLAYER_ID",
-            "PLAYER_NAME",
+            "PLAYER",
             "STATUS",
             "REASON",
             "ABSENCE_TYPE",

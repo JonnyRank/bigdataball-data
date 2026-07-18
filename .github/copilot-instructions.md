@@ -45,7 +45,7 @@ The SQLite database (`nba_fantasy_logs.db`) contains:
 - **`dim_players`** — Player dimension table (`PLAYER_ID` INTEGER PK, `PLAYER_NAME` TEXT).
 - **`map_teams`** — Team name mapping table (`RAW_TEAM_NAME` → `TEAM_ABBREVIATION`). Not created by these scripts (manually managed).
 - **`fantasy_averages`** — Aggregated averages per player/season/team, computed by `create_summary_tables.py`.
-- **`player_absences`** — Raw absence log, one row per player per missed game, from the player-feed's `DNP-DND-NWT` sheet. Columns: `GAME_DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER_NAME`, `STATUS`, `REASON`, and derived `ABSENCE_TYPE` (`'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`). Conflict policy: box score wins — a row is skipped at ingest if `player_logs` already has a box score for the same `(PLAYER_ID, GAME_ID)` (5 such rows known in 2025-26). Populated by `absence_ingestion.py`.
+- **`player_absences`** — Raw absence log, one row per player per missed game, from the player-feed's `DNP-DND-NWT` sheet. Columns: `DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER`, `STATUS`, `REASON` (note: the sheet's `GAME DATE`/`PLAYER NAME` headers are renamed at ingest to match the `player_logs`/`fantasy_logs` convention), and derived `ABSENCE_TYPE` (`'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`). Conflict policy: box score wins — a row is skipped at ingest if `player_logs` already has a box score for the same `(PLAYER_ID, GAME_ID)` (5 such rows known in 2025-26). Populated by `absence_ingestion.py`.
 
 ### Views
 - `vw_player_averages_regular_season` — Regular season averages from `fantasy_averages`.

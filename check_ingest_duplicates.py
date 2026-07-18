@@ -1,7 +1,8 @@
 """check_ingest_duplicates.py
 
-Detect (and optionally remove) duplicate game-log rows in `player_logs` and
-`fantasy_logs` caused by the de-duplication bug described in issue #6.
+Detect (and optionally remove) duplicate game-log rows in `player_logs`,
+`fantasy_logs`, and `player_absences` caused by the de-duplication bug
+described in issue #6.
 
 Background
 ----------
@@ -82,7 +83,9 @@ BASE_DATA_PATH = paths.resolve_base_data_path()
 DB_PATH = os.path.join(BASE_DATA_PATH, "nba_fantasy_logs.db")
 
 # Tables whose natural unique key is (PLAYER_ID, DATE).
-LOG_TABLES = ["player_logs", "fantasy_logs"]
+LOG_TABLES = ["player_logs", "fantasy_logs", "player_absences"]
+
+KEY_COLUMNS = ("PLAYER_ID", "DATE")
 
 
 def table_exists(conn, table):
@@ -90,6 +93,26 @@ def table_exists(conn, table):
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
     ).fetchone()
     return row is not None
+
+
+def require_key_columns(conn, table):
+    """Fail loudly if the key columns are missing from the table.
+
+    SQLite silently treats a double-quoted identifier that matches no column
+    as a STRING LITERAL, so e.g. GROUP BY "PLAYER_ID", "DATE" against a table
+    without a DATE column groups every row per player under the constant
+    'DATE' — producing a wall of bogus "duplicates" instead of an error.
+    Guarding here turns that failure mode into an explicit crash.
+    """
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    missing = [c for c in KEY_COLUMNS if c not in cols]
+    if missing:
+        raise RuntimeError(
+            f"Table '{table}' is missing key column(s) {missing} "
+            f"(has: {sorted(cols)}). Refusing to check/remove duplicates — "
+            "without this guard SQLite would treat the quoted column name as "
+            "a string literal and report nonsense duplicates."
+        )
 
 
 def get_stats(conn, table):
@@ -110,6 +133,7 @@ def report(conn, table):
         print("  Table does not exist (nothing to check).")
         return 0
 
+    require_key_columns(conn, table)
     total_rows, distinct_games, distinct_full_rows = get_stats(conn, table)
     extra_rows = total_rows - distinct_games
 
@@ -160,6 +184,7 @@ def remove(conn, table):
         print(f"\n=== {table} === (does not exist, skipping)")
         return
 
+    require_key_columns(conn, table)
     before = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     conn.execute(
         f"""
@@ -200,7 +225,7 @@ def main():
         "--table",
         choices=LOG_TABLES + ["all"],
         default="all",
-        help="Table to check/remove (player_logs | fantasy_logs | all).",
+        help="Table to check/remove (player_logs | fantasy_logs | player_absences | all).",
     )
     parser.add_argument(
         "--vacuum",

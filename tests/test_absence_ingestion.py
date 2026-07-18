@@ -49,6 +49,35 @@ def test_single_file_loads_absences_and_learns_players(player_upload):
     assert absence_ids == [99]
 
 
+def test_absence_columns_match_log_table_convention(player_upload):
+    """player_absences must use the repo-wide log-table column names
+    (DATE, PLAYER) -- not the sheet's sanitized GAME_DATE / PLAYER_NAME --
+    so cross-table queries and check_ingest_duplicates.py work unchanged."""
+    mod = player_upload
+    player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    absence_rows = make_absence_rows([
+        ("2025-11-01", 22500001, "Houston", "Dallas", 99, "Beta Bench", "DNP", "COACH'S DECISION"),
+    ])
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), player_rows, absence_rows
+    )
+
+    mod.main()
+
+    columns = list(pd.read_sql_query("SELECT * FROM player_absences", mod.engine).columns)
+    assert columns == [
+        "DATE",
+        "GAME_ID",
+        "TEAM",
+        "OPPONENT",
+        "PLAYER_ID",
+        "PLAYER",
+        "STATUS",
+        "REASON",
+        "ABSENCE_TYPE",
+    ]
+
+
 def test_absence_type_derivation(player_upload):
     mod = player_upload
     player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
@@ -178,8 +207,8 @@ def test_absence_player_name_standardization(player_upload):
     mod.main()
 
     absence_name = pd.read_sql_query(
-        "SELECT PLAYER_NAME FROM player_absences WHERE PLAYER_ID = 77", mod.engine
-    )["PLAYER_NAME"].tolist()
+        "SELECT PLAYER FROM player_absences WHERE PLAYER_ID = 77", mod.engine
+    )["PLAYER"].tolist()
     assert absence_name == ["Gregory Jackson"]
 
     dim_name = pd.read_sql_query(
