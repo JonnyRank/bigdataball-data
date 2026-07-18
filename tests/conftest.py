@@ -55,6 +55,22 @@ def fantasy_upload(tmp_path, monkeypatch):
 
     module = importlib.import_module("daily_fantasy_log_upload")
 
+    # A test that drives main() to completion sends a REAL email when the
+    # developer's .env has EMAIL_ENABLED — indistinguishable from a production
+    # run. Wrap the sender so any such email is clearly marked as pytest
+    # traffic. Tests that want to capture/suppress the email still monkeypatch
+    # send_email_alert themselves, which replaces this wrapper.
+    real_send = module.email_notifier.send_email_alert
+
+    def send_marked_as_test(subject, body):
+        real_send(
+            f"[PYTEST] {subject}",
+            "This email was sent by the pytest suite (fantasy_upload fixture), "
+            "NOT by a production pipeline run.\n\n" + body,
+        )
+
+    monkeypatch.setattr(module.email_notifier, "send_email_alert", send_marked_as_test)
+
     yield module
 
     module.engine.dispose()
