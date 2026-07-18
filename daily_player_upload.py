@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import glob
 import os
+import absence_ingestion
 import mappings
 import paths
 
@@ -88,13 +89,17 @@ def main():
 
     if not files_to_process:
         print("No new files found to process.")
-        return 0, 0
+        return 0, 0, 0
 
     print(f"Found {len(files_to_process)} new file(s) to process...")
 
     # Initialize ONCE before the loop so keys added per file accumulate across files
     # processed in the same run (prevents re-inserting logs from an earlier file).
     existing_log_keys = set(existing_logs_df["log_key"])
+
+    # Same "initialize once" pattern for the DNP-DND-NWT absence sheet's keys.
+    existing_absence_keys = absence_ingestion.load_existing_absence_keys(engine)
+    absences_count = 0
 
     processed_count = 0
     overwritten_count = 0
@@ -234,6 +239,22 @@ def main():
                 )
                 existing_log_keys.update(newly_added_keys)
 
+            # --- 4d.5 Ingest the DNP-DND-NWT absence sheet from the same file ---
+            # Must run after the box-score rows above are loaded (the conflict
+            # filter needs player_logs to reflect this file's box scores) and
+            # before the archive move below, so a failure here also stops the
+            # file from being archived.
+            inserted, sheet_found = absence_ingestion.ingest_absences(
+                file_path, engine, existing_absence_keys
+            )
+            if not sheet_found:
+                print(
+                    f"  > WARNING: no '{absence_ingestion.ABSENCE_SHEET_NAME}' sheet in {file_name}; skipping absences."
+                )
+            else:
+                print(f"  > Added {inserted} new absence rows to player_absences.")
+            absences_count += inserted
+
             # --- 4e. Move File on Success ---
             destination_path = os.path.join(PROCESSED_FOLDER, file_name)
 
@@ -254,7 +275,7 @@ def main():
 
     print("\n--- All new files processed. ---")
 
-    return processed_count, overwritten_count
+    return processed_count, overwritten_count, absences_count
     # --- Run the summary and export pipeline automatically ---
     # print("\nStarting automatic summary generation...")
     # create_summary_tables.run_summary_pipeline()

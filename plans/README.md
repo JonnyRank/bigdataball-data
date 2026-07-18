@@ -27,6 +27,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 010  | Expand fantasy log upload test suite | P2 | M | none (fixture + helpers exist) | TODO (drift-checked 2026-06-22 @ `c2f810f`: in-scope files unchanged since base `3844392`; finding holds — only 1 test in `test_daily_fantasy_log_upload.py`) | [#28](https://github.com/JonnyRank/bigdataball-data/issues/28) |
 | 011  | Add tests for `create_summary_tables.py` | P2 | L | none | TODO (drift-checked 2026-06-22 @ `c2f810f`: in-scope files unchanged since base `3844392`; finding holds — no test exercises `create_summary_tables.py`) | [#29](https://github.com/JonnyRank/bigdataball-data/issues/29) |
 | 012  | Add DB-level UNIQUE constraint to log tables | P1 | M | none (run `check_ingest_duplicates --remove` first on live DB) | TODO (drift-checked 2026-06-22 @ `c2f810f`: in-scope files unchanged since base `3844392`; finding holds — log tables still have no UNIQUE constraint) | [#30](https://github.com/JonnyRank/bigdataball-data/issues/30) |
+| 013  | Ingest DNP-DND-NWT sheet into `player_absences` | P1 | M | 002/003 | DONE (2026-07-18: GAME_ID stored as INTEGER matching player_logs — deviation from plan's TEXT zfill(10)) | — |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
