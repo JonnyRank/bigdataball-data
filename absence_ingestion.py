@@ -117,8 +117,12 @@ def ingest_absences(file_path, engine, existing_keys):
     df["PLAYER_NAME"] = df["PLAYER_NAME"].replace(mappings.PLAYER_NAME_MAP)
 
     # --- Derived column ---
+    # Normalize case/whitespace before comparing so a feed variant like
+    # "Coach's Decision " can't silently miscategorize as INJURY/ILLNESS/OTHER.
     df["ABSENCE_TYPE"] = df["REASON"].apply(
-        lambda r: "DNP-CD" if r == DNP_CD_REASON else "INJURY/ILLNESS/OTHER"
+        lambda r: "DNP-CD"
+        if str(r).strip().upper() == DNP_CD_REASON
+        else "INJURY/ILLNESS/OTHER"
     )
 
     # --- Conflict filter: box score wins ---

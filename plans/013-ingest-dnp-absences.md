@@ -1,5 +1,14 @@
 # Plan 013: Ingest the DNP-DND-NWT sheet into a new `player_absences` table
 
+> **Execution note (2026-07-18, PR #38)**: Step 1's verification found that
+> `player_logs` stores `GAME_ID` as an **unpadded INTEGER** (pandas reads the
+> box-score sheet's GAME-ID as int64 and `daily_player_upload.py` never
+> converts it), not the zero-padded TEXT this plan's schema table and
+> normalization snippets assume. Per Step 1's own fallback instruction
+> ("match whatever `player_logs` actually does"), `player_absences.GAME_ID`
+> was implemented as `astype(int)` — INTEGER, unpadded. Ignore the
+> `zfill(10)` / TEXT references below; do not reintroduce padding.
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and

@@ -56,6 +56,8 @@ def test_absence_type_derivation(player_upload):
         ("2025-11-01", 22500001, "Houston", "Dallas", 91, "Player A", "DNP", "COACH'S DECISION"),
         ("2025-11-01", 22500001, "Houston", "Dallas", 92, "Player B", "DND", "REST"),
         ("2025-11-01", 22500001, "Houston", "Dallas", 93, "Player C", "DND", "INJURY/ILLNESS"),
+        # Case/whitespace variant must still be recognized as a coach's decision.
+        ("2025-11-01", 22500001, "Houston", "Dallas", 94, "Player D", "DNP", "Coach's Decision "),
     ])
     write_player_xlsx_with_absences(
         os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), player_rows, absence_rows
@@ -70,6 +72,7 @@ def test_absence_type_derivation(player_upload):
     assert lookup[91] == "DNP-CD"
     assert lookup[92] == "INJURY/ILLNESS/OTHER"
     assert lookup[93] == "INJURY/ILLNESS/OTHER"
+    assert lookup[94] == "DNP-CD"
 
 
 def test_rerun_with_same_file_inserts_no_duplicate_absences(player_upload):
