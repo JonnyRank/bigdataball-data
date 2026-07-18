@@ -28,6 +28,7 @@ BigDataBall-Ingestion-Pipeline-Setup-Guide.md
 Python-Bigdataball-Project.code-workspace
 
 # SQL query files unused in scripts
+queries/
 *.sql
 .devdbrc
 
