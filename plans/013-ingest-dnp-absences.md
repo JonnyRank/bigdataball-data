@@ -8,6 +8,11 @@
 > ("match whatever `player_logs` actually does"), `player_absences.GAME_ID`
 > was implemented as `astype(int)` — INTEGER, unpadded. Ignore the
 > `zfill(10)` / TEXT references below; do not reintroduce padding.
+>
+> Also per review: the `ABSENCE_TYPE` classification compares
+> `str(REASON).strip().upper()` against `COACH'S DECISION` (raw `REASON` is
+> stored unchanged), so case/whitespace variants cannot silently
+> miscategorize — design decision 5's exact-string comparison is superseded.
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
