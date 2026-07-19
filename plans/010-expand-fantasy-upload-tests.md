@@ -17,7 +17,16 @@
 - **Risk**: LOW
 - **Depends on**: none (fixture and helpers already exist)
 - **Category**: tests
-- **Planned at**: commit `3844392`, 2026-06-21
+- **Planned at**: commit `3844392`, 2026-06-21. **Re-verified at reconcile 2026-07-19
+  (`967d88a`)**: the finding holds — `tests/test_daily_fantasy_log_upload.py` still has
+  exactly 1 test and `write_fantasy_xlsx` still has the original `(path, rows)` signature
+  at `tests/helpers.py:15`. Plan 013 shifted line numbers in `daily_fantasy_log_upload.py`
+  by a few lines (verified anchors: `columns_to_drop` now at line 161, date `strftime` at
+  183, `PLAYER_NAME_MAP` standardization at 196–202, log `to_sql` at 250) — the excerpted
+  code itself is unchanged; treat the excerpts as authoritative and the old line numbers
+  as approximate. Plan 013 also added an email-marking wrapper inside the `fantasy_upload`
+  fixture (`tests/conftest.py`, fixture now starts at line 33) — the fixture remains
+  out of scope and needs no change. The full suite is now 47 tests (was 38).
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/28
 
 ## Why this matters

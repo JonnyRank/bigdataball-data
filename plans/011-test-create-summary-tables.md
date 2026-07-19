@@ -17,7 +17,13 @@
 - **Risk**: LOW
 - **Depends on**: none (uses the same env-seam pattern as existing fixtures)
 - **Category**: tests
-- **Planned at**: commit `3844392`, 2026-06-21
+- **Planned at**: commit `3844392`, 2026-06-21. **Re-verified at reconcile 2026-07-19
+  (`967d88a`)**: the finding holds — `create_summary_tables.py` is unchanged since this
+  plan was written and still has zero test coverage. The only drift is in
+  `tests/conftest.py`: plan 013's email-marking wrapper shifted the fixture positions
+  (`fantasy_upload` now starts at line 33, `player_upload` at line 84) — the `player_upload`
+  fixture excerpt below is cited as a *pattern* to model a new fixture on and its content
+  is unchanged, so only its line reference is stale. The full suite is now 47 tests (was 38).
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/29
 
 ## Why this matters
