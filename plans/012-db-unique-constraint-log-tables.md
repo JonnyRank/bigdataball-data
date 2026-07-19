@@ -275,7 +275,10 @@ def ensure_unique_index(engine):
         )
 ```
 
-(`from sqlalchemy import text` is already imported in `absence_ingestion.py`.) A run in
+**Note**: unlike the two upload scripts, `absence_ingestion.py` does NOT already import
+`text` — it currently imports only `pandas` and `mappings` (lines 9–10) and does all its
+SQL through pandas. Add `from sqlalchemy import text` alongside its existing imports as
+part of this step, or the helper above raises `NameError` at runtime. A run in
 which zero absence rows survive the filters never calls `to_sql` and therefore may not
 create the index — that is acceptable: no insert happened, so nothing slipped past the
 constraint on that run.
