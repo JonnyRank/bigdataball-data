@@ -17,7 +17,17 @@
 - **Risk**: MED
 - **Depends on**: none (but MUST run `check_ingest_duplicates.py --remove` on the live DB before deploying — see Step 1)
 - **Category**: data-integrity
-- **Planned at**: commit `3844392`, 2026-06-21
+- **Planned at**: commit `3844392`, 2026-06-21. **Refreshed at reconcile 2026-07-19
+  (`967d88a`)**: the finding holds and has **grown** — plan 013 (merged `#38`) added a third
+  log table, `player_absences`, with the exact same pattern (in-memory key-set dedup +
+  `to_sql(if_exists="append")`, no DB-level constraint), so this plan now covers it too
+  (Step 3b, added at reconcile). Line-number drift from plan 013's wiring, all verified:
+  in `daily_player_upload.py`, `initialize_database()` now starts at line 34 and the
+  `truly_new_logs_df.to_sql(...)` is at lines 228–230; `main()` now returns a **3-tuple**
+  `(processed_count, overwritten_count, absences_count)` (line 278) — irrelevant to this
+  plan's changes, but don't be surprised by it. In `daily_fantasy_log_upload.py`,
+  `initialize_database()` is still at line 41 and the log `to_sql` is at line 250.
+  The excerpted code below is otherwise unchanged. Full suite is now 47 tests (was 38).
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/30
 
 ## Why this matters
@@ -107,8 +117,10 @@ regresses.
 **In scope** (the only files you should modify):
 - `daily_player_upload.py` — extend `initialize_database()` to add the unique index
 - `daily_fantasy_log_upload.py` — extend `initialize_database()` to add the unique index
+- `absence_ingestion.py` — add the unique index on `player_absences` after its `to_sql` (Step 3b)
 - `tests/test_daily_player_upload.py` — add one regression test for the constraint
 - `tests/test_daily_fantasy_log_upload.py` — add one regression test for the constraint
+- `tests/test_absence_ingestion.py` — add one regression test for the `player_absences` index (Step 5b)
 
 **Out of scope** (do NOT touch):
 - `check_ingest_duplicates.py` — the safety-net tool is unchanged
@@ -209,7 +221,7 @@ def initialize_database():
 ```
 
 In `main()`, add one call to `ensure_unique_index()` immediately after the
-`truly_new_logs_df.to_sql(...)` line (currently at line ~223):
+`truly_new_logs_df.to_sql(...)` line (currently at lines 228–230):
 
 ```python
                 truly_new_logs_df.to_sql(
@@ -227,12 +239,51 @@ second run.
 
 Add the same `ensure_unique_index()` function (using `LOGS_TABLE_NAME = "fantasy_logs"`).
 Call it from `initialize_database()` and after the `truly_new_logs_df.to_sql(...)` in
-`main()` (currently at line ~249).
+`main()` (currently at line 250).
 
 Current `initialize_database()` is at lines 41-55 — same structure as player_upload;
 apply the identical change.
 
 **Verify**: `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
+
+### Step 3b: Add the unique index to `player_absences` (added at reconcile 2026-07-19)
+
+`absence_ingestion.py` (added by plan 013) appends to `player_absences` with the same
+in-memory-dedup-only pattern. Its dedup key is `(PLAYER_ID, GAME_ID)` — **not**
+`(PLAYER_ID, DATE)` like the other two tables (see `absence_ingestion.py:139`:
+`df["absence_key"] = df["PLAYER_ID"].astype(str) + "_" + df["GAME_ID"].astype(str)`).
+Note `GAME_ID` is stored as an unpadded INTEGER (plan 013 execution note).
+
+`absence_ingestion` has no `initialize_database()` — it receives an `engine` per call and
+its `to_sql` happens inside `ingest_absences()` only when new rows survive the dedup.
+So: add a module-level helper and call it immediately after the `player_absences`
+`to_sql(...)` call inside `ingest_absences()` (at that point the table is guaranteed to
+exist, so no `no such table` guard is needed):
+
+```python
+def ensure_unique_index(engine):
+    """Unique index on (PLAYER_ID, GAME_ID) — DB-level backstop for the in-memory
+    absence_key dedup. Called right after to_sql so it exists from the first insert."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_{ABSENCES_TABLE_NAME}_player_game
+            ON {ABSENCES_TABLE_NAME} ("PLAYER_ID", "GAME_ID")
+            """
+            )
+        )
+```
+
+**Note**: unlike the two upload scripts, `absence_ingestion.py` does NOT already import
+`text` — it currently imports only `pandas` and `mappings` (lines 9–10) and does all its
+SQL through pandas. Add `from sqlalchemy import text` alongside its existing imports as
+part of this step, or the helper above raises `NameError` at runtime. A run in
+which zero absence rows survive the filters never calls `to_sql` and therefore may not
+create the index — that is acceptable: no insert happened, so nothing slipped past the
+constraint on that run.
+
+**Verify**: `python3 -m py_compile absence_ingestion.py` → exit 0.
 
 ### Step 4: Add a regression test to `test_daily_player_upload.py`
 
@@ -256,13 +307,13 @@ def test_unique_index_prevents_silent_duplicate(player_upload):
     # Only one row — the in-memory dedup prevents the duplicate.
     assert count_rows(mod.engine, "player_logs") == 1
 
-    # The unique index must exist.
+    # The index must exist AND be unique (checking the name alone would pass
+    # for a non-unique index).
     inspector = inspect(mod.engine)
     indexes = inspector.get_indexes("player_logs")
-    index_names = [idx["name"] for idx in indexes]
-    assert any("player_date" in name for name in index_names), (
-        f"Unique index not found. Indexes: {index_names}"
-    )
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
 **Verify**: `python3 -m pytest -q tests/test_daily_player_upload.py::test_unique_index_prevents_silent_duplicate` → 1 passed.
@@ -282,13 +333,47 @@ def test_unique_index_exists_on_fantasy_logs(fantasy_upload):
 
     inspector = inspect(mod.engine)
     indexes = inspector.get_indexes("fantasy_logs")
-    index_names = [idx["name"] for idx in indexes]
-    assert any("player_date" in name for name in index_names), (
-        f"Unique index not found. Indexes: {index_names}"
-    )
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
 **Verify**: `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py::test_unique_index_exists_on_fantasy_logs` → 1 passed.
+
+### Step 5b: Add a regression test to `test_absence_ingestion.py` (added at reconcile 2026-07-19)
+
+Add to `tests/test_absence_ingestion.py`, following the style of its existing tests
+(they use the `player_upload` fixture and the multi-sheet helpers from `tests/helpers.py`
+— model the setup on the first test in that file):
+
+```python
+def test_unique_index_exists_on_player_absences(player_upload):
+    """ensure_unique_index must create a unique index on player_absences after
+    the first absence insert."""
+    from sqlalchemy import inspect
+    mod = player_upload
+    rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    absence_rows = make_absence_rows([(2, "Beta Player", "2025-11-01", 22500001, "DNP", "REST")])
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows, absence_rows
+    )
+    mod.main()
+
+    inspector = inspect(mod.engine)
+    indexes = inspector.get_indexes("player_absences")
+    matching = [idx for idx in indexes if "player_game" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
+```
+
+**Before writing this test, read the existing tests in `tests/test_absence_ingestion.py`
+and match the exact signatures of `make_rows`, `make_absence_rows`, and
+`write_player_xlsx_with_absences` as they appear in `tests/helpers.py`** — the argument
+shapes above are illustrative; the helpers are authoritative. If the helper signatures
+don't accommodate this test, STOP and report rather than modifying `tests/helpers.py`
+(helpers are out of scope for this plan).
+
+**Verify**: `python3 -m pytest -q tests/test_absence_ingestion.py` → all pass (9 existing + 1 new).
 
 ### Step 6: Full suite
 
@@ -296,11 +381,13 @@ def test_unique_index_exists_on_fantasy_logs(fantasy_upload):
 
 ## Test plan
 
-Two new regression tests:
+Three new regression tests:
 - `tests/test_daily_player_upload.py::test_unique_index_prevents_silent_duplicate`
   — re-ingesting the same file produces 1 row (not 2) AND the unique index is present.
 - `tests/test_daily_fantasy_log_upload.py::test_unique_index_exists_on_fantasy_logs`
   — after first ingest, the unique index exists on `fantasy_logs`.
+- `tests/test_absence_ingestion.py::test_unique_index_exists_on_player_absences`
+  — after the first absence insert, the unique index exists on `player_absences`.
 
 These tests verify both the index existence (via `sqlalchemy.inspect`) and the correctness
 of the dedup behavior (row count). They use the existing fixtures — no new fixtures needed.
@@ -309,10 +396,11 @@ of the dedup behavior (row count). They use the existing fixtures — no new fix
 
 ALL must hold:
 
-- [ ] `python3 -m py_compile daily_player_upload.py daily_fantasy_log_upload.py` exits 0
-- [ ] `python3 -m pytest -q` exits 0 with 2 new tests in scope
-- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name
-- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name
+- [ ] `python3 -m py_compile daily_player_upload.py daily_fantasy_log_upload.py absence_ingestion.py` exits 0
+- [ ] `python3 -m pytest -q` exits 0 with 3 new tests in scope
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
+- [ ] On a test DB (after an absence insert): `sqlalchemy.inspect(engine).get_indexes("player_absences")` returns at least one index with "player_game" in the name **and `unique == True`**
 - [ ] No change to `check_ingest_duplicates.py` or any export script (`git diff --name-only`)
 - [ ] `plans/README.md` status row for 012 updated
 
