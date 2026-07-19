@@ -307,13 +307,13 @@ def test_unique_index_prevents_silent_duplicate(player_upload):
     # Only one row — the in-memory dedup prevents the duplicate.
     assert count_rows(mod.engine, "player_logs") == 1
 
-    # The unique index must exist.
+    # The index must exist AND be unique (checking the name alone would pass
+    # for a non-unique index).
     inspector = inspect(mod.engine)
     indexes = inspector.get_indexes("player_logs")
-    index_names = [idx["name"] for idx in indexes]
-    assert any("player_date" in name for name in index_names), (
-        f"Unique index not found. Indexes: {index_names}"
-    )
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
 **Verify**: `python3 -m pytest -q tests/test_daily_player_upload.py::test_unique_index_prevents_silent_duplicate` → 1 passed.
@@ -333,10 +333,9 @@ def test_unique_index_exists_on_fantasy_logs(fantasy_upload):
 
     inspector = inspect(mod.engine)
     indexes = inspector.get_indexes("fantasy_logs")
-    index_names = [idx["name"] for idx in indexes]
-    assert any("player_date" in name for name in index_names), (
-        f"Unique index not found. Indexes: {index_names}"
-    )
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
 **Verify**: `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py::test_unique_index_exists_on_fantasy_logs` → 1 passed.
@@ -361,10 +360,10 @@ def test_unique_index_exists_on_player_absences(player_upload):
     mod.main()
 
     inspector = inspect(mod.engine)
-    index_names = [idx["name"] for idx in inspector.get_indexes("player_absences")]
-    assert any("player_game" in name for name in index_names), (
-        f"Unique index not found. Indexes: {index_names}"
-    )
+    indexes = inspector.get_indexes("player_absences")
+    matching = [idx for idx in indexes if "player_game" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
 **Before writing this test, read the existing tests in `tests/test_absence_ingestion.py`
@@ -399,9 +398,9 @@ ALL must hold:
 
 - [ ] `python3 -m py_compile daily_player_upload.py daily_fantasy_log_upload.py absence_ingestion.py` exits 0
 - [ ] `python3 -m pytest -q` exits 0 with 3 new tests in scope
-- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name
-- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name
-- [ ] On a test DB (after an absence insert): `sqlalchemy.inspect(engine).get_indexes("player_absences")` returns at least one index with "player_game" in the name
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
+- [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
+- [ ] On a test DB (after an absence insert): `sqlalchemy.inspect(engine).get_indexes("player_absences")` returns at least one index with "player_game" in the name **and `unique == True`**
 - [ ] No change to `check_ingest_duplicates.py` or any export script (`git diff --name-only`)
 - [ ] `plans/README.md` status row for 012 updated
 
