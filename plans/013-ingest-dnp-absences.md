@@ -1,11 +1,14 @@
 # Plan 013: Ingest the DNP-DND-NWT sheet into a new `player_absences` table
 
-> **Superseded dedup key (2026-07-21, plan 012 review)**: design decision 1 below keys the
-> absence dedup on `(PLAYER_ID, GAME_ID)`. Plan 012 re-keys it (and the box-score conflict
-> filter) to `(PLAYER_ID, DATE)` to match the other two log tables and the key
-> `check_ingest_duplicates.py` already enforces for all three. `GAME_ID` remains a stored
-> column; only the dedup/index key changes. Read the `PLAYER_ID + "_" + GAME_ID` references
-> below as historical.
+> **Superseded dedup key (2026-07-21, plan 012 review) — NON-EXECUTABLE HISTORY**: this plan
+> is DONE; the sections below are a historical record, not instructions to implement.
+> Specifically, **design decision 1** (dedup key `PLAYER_ID + "_" + GAME_ID`) and **design
+> decision 6** (box-score conflict filter keyed on `(PLAYER_ID, GAME_ID)`) are **superseded by
+> plan 012**, which re-keys both to `(PLAYER_ID, DATE)` — matching the other two log tables and
+> the key `check_ingest_duplicates.py` already enforces for all three. Wherever the text below
+> prescribes `GAME_ID` for deduplication or conflict filtering, or says "do not revisit", treat
+> it as historical and non-executable: the **active key is `(PLAYER_ID, DATE)`**. `GAME_ID`
+> remains a stored column; only the dedup/index key changed.
 >
 > **Execution note (2026-07-18, PR #38)**: Step 1's verification found that
 > `player_logs` stores `GAME_ID` as an **unpadded INTEGER** (pandas reads the

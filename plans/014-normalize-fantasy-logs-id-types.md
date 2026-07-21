@@ -85,13 +85,24 @@ to `float64` before `iloc` drops the row, so the fixture already reproduces the 
 
 ### Step 1: Confirm the live storage types (pre-change diagnostic)
 
-On the developer's machine:
+On the developer's machine (schema-safe — only queries `GAME_ID` if the column exists,
+since the plan allows it to be absent):
 ```bash
-python3 -c "import sqlite3, os, paths; db=os.path.join(paths.resolve_base_data_path(),'nba_fantasy_logs.db'); c=sqlite3.connect(db); print([(r[1],r[2]) for r in c.execute('PRAGMA table_info(fantasy_logs)') if r[1] in ('PLAYER_ID','GAME_ID')]); print(c.execute('SELECT typeof(PLAYER_ID), typeof(GAME_ID) FROM fantasy_logs LIMIT 1').fetchone())"
+python3 -c "
+import sqlite3, os, paths
+db = os.path.join(paths.resolve_base_data_path(), 'nba_fantasy_logs.db')
+c = sqlite3.connect(db)
+cols = [r[1] for r in c.execute('PRAGMA table_info(fantasy_logs)')]
+id_cols = [x for x in ('PLAYER_ID', 'GAME_ID') if x in cols]
+print('id columns present:', id_cols)
+sel = ', '.join('typeof(\"%s\")' % x for x in id_cols)
+print(c.execute('SELECT %s FROM fantasy_logs LIMIT 1' % sel).fetchone())
+"
 ```
-Expected: the declared types and/or `typeof(...)` report `real`/`float` for one or both
-columns. Record what you see. If both are already `integer`, the live DB needs no migration
-(Step 3's data pass is a no-op) — but still apply Steps 2/4 so new inserts stay INTEGER.
+Expected: `typeof(...)` reports `real`/`float` for one or both ID columns. Record what you
+see, and note whether `GAME_ID` is present at all. If both are already `integer`, the live DB
+needs no migration (Step 3's data pass is a no-op) — but still apply Steps 2/4 so new inserts
+stay INTEGER.
 
 ### Step 2: Cast incoming IDs in `daily_fantasy_log_upload.py`
 
@@ -112,6 +123,13 @@ removes any remaining null-ID rows, so `.astype(int)` cannot hit a `NaN`:
 id_cols = [c for c in ("PLAYER_ID", "GAME_ID") if c in cleaned_data.columns]
 cleaned_data = cleaned_data.dropna(subset=id_cols)
 for c in id_cols:
+    # Reject fractional IDs rather than silently truncating them: astype(int)
+    # would turn a corrupt 12345.7 into 12345 (a different, valid-looking player).
+    frac = cleaned_data[c][cleaned_data[c] % 1 != 0]
+    if not frac.empty:
+        raise ValueError(
+            f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
+        )
     cleaned_data[c] = cleaned_data[c].astype(int)
 ```
 
@@ -155,6 +173,11 @@ df = pd.read_sql_table("fantasy_logs", engine)
 id_cols = [c for c in ("PLAYER_ID", "GAME_ID") if c in df.columns]
 df = df.dropna(subset=id_cols)
 for c in id_cols:
+    frac = df[c][df[c] % 1 != 0]
+    if not frac.empty:
+        raise ValueError(
+            f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
+        )
     df[c] = df[c].astype(int)
 df.to_sql(
     "fantasy_logs", engine, if_exists="replace", index=False,
@@ -170,11 +193,20 @@ print(f"Rewrote fantasy_logs: {len(df)} rows, {id_cols} cast to INTEGER.")
 
 **Deploy Steps 2 and 3 together** (see trap 1).
 
-**Verify** (after running the patch on a copy of the live DB):
+**Verify** (after running the patch on a copy of the live DB — same schema-safe form as Step 1):
 ```bash
-python3 -c "import sqlite3, os, paths; db=os.path.join(paths.resolve_base_data_path(),'nba_fantasy_logs.db'); c=sqlite3.connect(db); print(c.execute('SELECT typeof(PLAYER_ID), typeof(GAME_ID) FROM fantasy_logs LIMIT 1').fetchone())"
+python3 -c "
+import sqlite3, os, paths
+db = os.path.join(paths.resolve_base_data_path(), 'nba_fantasy_logs.db')
+c = sqlite3.connect(db)
+cols = [r[1] for r in c.execute('PRAGMA table_info(fantasy_logs)')]
+id_cols = [x for x in ('PLAYER_ID', 'GAME_ID') if x in cols]
+sel = ', '.join('typeof(\"%s\")' % x for x in id_cols)
+print(id_cols, c.execute('SELECT %s FROM fantasy_logs LIMIT 1' % sel).fetchone())
+"
 ```
-Expected: `('integer', 'integer')` (or `('integer', ...)` if the table has no GAME_ID).
+Expected: every reported type is `integer` (e.g. `['PLAYER_ID', 'GAME_ID'] ('integer',
+'integer')`, or `['PLAYER_ID'] ('integer',)` if the table has no GAME_ID).
 
 ### Step 4: Dedup-stability gate
 
@@ -206,6 +238,17 @@ def test_player_id_stored_as_integer(fantasy_upload):
     )["t"].unique().tolist()
     assert types == ["integer"], f"PLAYER_ID stored as {types}, expected ['integer']"
 
+    # If GAME_ID is present (real feed has it; the current test fixture does not),
+    # it must also be INTEGER. Conditional so the assertion no-ops when absent —
+    # this makes GAME_ID a required gate the moment any fixture/data provides it,
+    # without editing the shared helper.
+    cols = pd.read_sql_query("SELECT * FROM fantasy_logs LIMIT 0", mod.engine).columns
+    if "GAME_ID" in cols:
+        gtypes = pd.read_sql_query(
+            "SELECT typeof(GAME_ID) AS t FROM fantasy_logs", mod.engine
+        )["t"].unique().tolist()
+        assert gtypes == ["integer"], f"GAME_ID stored as {gtypes}, expected ['integer']"
+
 
 def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
     """The int cast must not break dedup: re-ingesting the same file inserts no
@@ -220,11 +263,13 @@ def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
 ```
 Add `make_fantasy_rows` / `count_rows` to the file's imports if not already present.
 
-**Note on GAME_ID:** the `write_fantasy_xlsx` helper has no GAME_ID column, so GAME_ID
-affinity is not unit-testable without extending the helper (out of scope — `tests/helpers.py`
-is shared and modifying it risks other tests). GAME_ID is covered by the same guarded cast in
-Steps 2/3 and verified on the live DB in Step 3. If you decide the GAME_ID path needs a test,
-STOP and raise it rather than editing the shared helper unilaterally.
+**Note on GAME_ID:** the current `write_fantasy_xlsx` helper has no GAME_ID column, so a
+*dedicated* GAME_ID fixture is not added here (that would require editing the shared
+`tests/helpers.py`, which risks other tests — out of scope). Instead the conditional
+assertion above makes GAME_ID a required INTEGER gate automatically the moment any
+fixture or real data provides the column, and Step 3's live-DB verification checks it on
+the actual migrated table. If you conclude a dedicated GAME_ID fixture is warranted, STOP
+and raise it rather than editing the shared helper unilaterally.
 
 **Verify**: `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py` → all pass.
 
