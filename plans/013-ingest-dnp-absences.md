@@ -1,5 +1,12 @@
 # Plan 013: Ingest the DNP-DND-NWT sheet into a new `player_absences` table
 
+> **Superseded dedup key (2026-07-21, plan 012 review)**: design decision 1 below keys the
+> absence dedup on `(PLAYER_ID, GAME_ID)`. Plan 012 re-keys it (and the box-score conflict
+> filter) to `(PLAYER_ID, DATE)` to match the other two log tables and the key
+> `check_ingest_duplicates.py` already enforces for all three. `GAME_ID` remains a stored
+> column; only the dedup/index key changes. Read the `PLAYER_ID + "_" + GAME_ID` references
+> below as historical.
+>
 > **Execution note (2026-07-18, PR #38)**: Step 1's verification found that
 > `player_logs` stores `GAME_ID` as an **unpadded INTEGER** (pandas reads the
 > box-score sheet's GAME-ID as int64 and `daily_player_upload.py` never

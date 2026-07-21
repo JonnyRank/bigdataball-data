@@ -28,6 +28,21 @@
   plan's changes, but don't be surprised by it. In `daily_fantasy_log_upload.py`,
   `initialize_database()` is still at line 41 and the log `to_sql` is at line 250.
   The excerpted code below is otherwise unchanged. Full suite is now 47 tests (was 38).
+- **Revised 2026-07-21 (review of this plan)**: `player_absences` is now indexed on
+  **`(PLAYER_ID, DATE)`** — the same key as the other two tables — instead of
+  `(PLAYER_ID, GAME_ID)`. Grounds (all code-verified, superseding the earlier
+  "GAME_ID may be missing" reasoning, which was unfounded): (1) `check_ingest_duplicates.py`
+  already declares `(PLAYER_ID, DATE)` the natural key for **all three** tables including
+  `player_absences` (`:86-88`, docstring `:17-18`), so the current GAME_ID absence dedup is
+  out of step with the very tool meant to clean that table, and this plan's own Step 1
+  precondition validates absences on `(PLAYER_ID, DATE)` while old Step 3b indexed on
+  GAME_ID — a self-contradiction; (2) plan 013's post-merge column rename to `DATE`/`PLAYER`
+  was itself done so `check_ingest_duplicates` would work — DATE alignment is the intended
+  direction; (3) `DATE` is uniformly `TEXT` across all three tables while `GAME_ID`/`PLAYER_ID`
+  have a FLOAT-vs-INTEGER split in `fantasy_logs` (tracked separately in plan 014). Because a
+  DATE index and the in-memory dedup key must match, the absence dedup **and** the box-score
+  conflict filter are re-keyed to DATE in the same change (new Step 3c). This supersedes plan
+  013's design-decision-1 dedup-key choice.
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/30
 
 ## Why this matters
@@ -117,7 +132,8 @@ regresses.
 **In scope** (the only files you should modify):
 - `daily_player_upload.py` — extend `initialize_database()` to add the unique index
 - `daily_fantasy_log_upload.py` — extend `initialize_database()` to add the unique index
-- `absence_ingestion.py` — add the unique index on `player_absences` after its `to_sql` (Step 3b)
+- `absence_ingestion.py` — add the unique index on `player_absences` (Step 3b) AND re-key
+  the absence dedup + box-score conflict filter from GAME_ID to DATE (Step 3c)
 - `tests/test_daily_player_upload.py` — add one regression test for the constraint
 - `tests/test_daily_fantasy_log_upload.py` — add one regression test for the constraint
 - `tests/test_absence_ingestion.py` — add one regression test for the `player_absences` index (Step 5b)
@@ -246,30 +262,31 @@ apply the identical change.
 
 **Verify**: `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
 
-### Step 3b: Add the unique index to `player_absences` (added at reconcile 2026-07-19)
+### Step 3b: Add the unique index to `player_absences` — on `(PLAYER_ID, DATE)`
 
 `absence_ingestion.py` (added by plan 013) appends to `player_absences` with the same
-in-memory-dedup-only pattern. Its dedup key is `(PLAYER_ID, GAME_ID)` — **not**
-`(PLAYER_ID, DATE)` like the other two tables (see `absence_ingestion.py:139`:
-`df["absence_key"] = df["PLAYER_ID"].astype(str) + "_" + df["GAME_ID"].astype(str)`).
-Note `GAME_ID` is stored as an unpadded INTEGER (plan 013 execution note).
+in-memory-dedup-only pattern. **Index it on `(PLAYER_ID, DATE)`** — the same key as the
+other two tables, and the key `check_ingest_duplicates.py` already treats as the natural key
+for this table (`:86-88`). (This differs from the reconcile-era draft of this step, which
+used `(PLAYER_ID, GAME_ID)`; see the 2026-07-21 revision note in Status for why.) Step 3c
+re-keys the in-memory absence dedup to DATE so the two agree — do Step 3c together with this.
 
 `absence_ingestion` has no `initialize_database()` — it receives an `engine` per call and
 its `to_sql` happens inside `ingest_absences()` only when new rows survive the dedup.
 So: add a module-level helper and call it immediately after the `player_absences`
-`to_sql(...)` call inside `ingest_absences()` (at that point the table is guaranteed to
-exist, so no `no such table` guard is needed):
+`to_sql(...)` call inside `ingest_absences()` (`:188`; at that point the table is guaranteed
+to exist, so no `no such table` guard is needed):
 
 ```python
 def ensure_unique_index(engine):
-    """Unique index on (PLAYER_ID, GAME_ID) — DB-level backstop for the in-memory
+    """Unique index on (PLAYER_ID, DATE) — DB-level backstop for the in-memory
     absence_key dedup. Called right after to_sql so it exists from the first insert."""
     with engine.begin() as conn:
         conn.execute(
             text(
                 f"""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_{ABSENCES_TABLE_NAME}_player_game
-            ON {ABSENCES_TABLE_NAME} ("PLAYER_ID", "GAME_ID")
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_{ABSENCES_TABLE_NAME}_player_date
+            ON {ABSENCES_TABLE_NAME} ("PLAYER_ID", "DATE")
             """
             )
         )
@@ -284,6 +301,52 @@ create the index — that is acceptable: no insert happened, so nothing slipped 
 constraint on that run.
 
 **Verify**: `python3 -m py_compile absence_ingestion.py` → exit 0.
+
+### Step 3c: Re-key the absence dedup and box-score conflict filter from GAME_ID to DATE
+
+For the `(PLAYER_ID, DATE)` index in Step 3b to match the in-memory filter, re-key the
+absence dedup from GAME_ID to DATE. `DATE` is already normalized to `%Y-%m-%d` at
+`absence_ingestion.py:118` (`df["DATE"] = pd.to_datetime(df["DATE"]).dt.strftime("%Y-%m-%d")`)
+before any key is built, so string keys are stable. Change three spots:
+
+1. **`load_existing_absence_keys` (`:53-65`)** — select and key on DATE:
+   ```python
+   df = pd.read_sql(
+       f'SELECT DISTINCT "PLAYER_ID", "DATE" FROM {ABSENCES_TABLE_NAME}',
+       engine,
+   )
+   return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
+   ```
+   Keep the `"no such table"` → empty-set guard.
+
+2. **`ingest_absences` `absence_key` (`:139`)** — build from DATE:
+   ```python
+   df["absence_key"] = df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str)
+   ```
+
+3. **`_load_box_score_keys` (`:68-84`)** — select and key on DATE, and drop the now-unneeded
+   `"no such column"` tolerance (DATE is always present in `player_logs`), but KEEP the
+   `"no such table"` tolerance:
+   ```python
+   df = pd.read_sql('SELECT "PLAYER_ID", "DATE" FROM player_logs', engine)
+   return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
+   # except Exception as e:
+   #     if "no such table" in str(e):
+   #         return set()
+   #     raise
+   ```
+   This is the one genuine behavior change: the box-score-wins conflict filter now matches
+   absences to box scores on `(PLAYER_ID, DATE)` instead of `(PLAYER_ID, GAME_ID)`. Because
+   NBA plays one game per team per day, both keys identify the same box-score row, so the
+   outcome is unchanged for well-formed data. Also update the docstrings of these three
+   functions (they currently say "PLAYER_ID_GAMEID") to say `PLAYER_ID_DATE`.
+
+Leave the inserted `GAME_ID` **column** untouched — it is still selected into
+`player_absences` (`:175-188`); only the key derivation changes.
+
+**Verify**: `python3 -m py_compile absence_ingestion.py` → exit 0; and
+`python3 -m pytest -q tests/test_absence_ingestion.py` → all pass (see Step 5b note — no
+existing absence test changes behavior under this re-key).
 
 ### Step 4: Add a regression test to `test_daily_player_upload.py`
 
@@ -352,26 +415,42 @@ def test_unique_index_exists_on_player_absences(player_upload):
     the first absence insert."""
     from sqlalchemy import inspect
     mod = player_upload
-    rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
-    absence_rows = make_absence_rows([(2, "Beta Player", "2025-11-01", 22500001, "DNP", "REST")])
+    player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    absence_rows = make_absence_rows([
+        ("2025-11-01", 22500001, "Houston", "Dallas", 99, "Beta Bench", "DNP", "COACH'S DECISION"),
+    ])
     write_player_xlsx_with_absences(
-        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows, absence_rows
+        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), player_rows, absence_rows
     )
     mod.main()
 
     inspector = inspect(mod.engine)
     indexes = inspector.get_indexes("player_absences")
-    matching = [idx for idx in indexes if "player_game" in idx["name"]]
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
     assert matching, f"Index not found. Indexes: {indexes}"
     assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
 ```
 
-**Before writing this test, read the existing tests in `tests/test_absence_ingestion.py`
-and match the exact signatures of `make_rows`, `make_absence_rows`, and
-`write_player_xlsx_with_absences` as they appear in `tests/helpers.py`** — the argument
-shapes above are illustrative; the helpers are authoritative. If the helper signatures
-don't accommodate this test, STOP and report rather than modifying `tests/helpers.py`
-(helpers are out of scope for this plan).
+**Before writing this test, read the existing tests in `tests/test_absence_ingestion.py`**
+— the `make_rows`, `make_absence_rows`, and `write_player_xlsx_with_absences` call shapes
+above mirror `test_single_file_loads_absences_and_learns_players` (the first test in that
+file) and `tests/helpers.py`; the helpers are authoritative. Note `make_absence_rows` takes
+`(game_date, game_id, team, opponent, player_id, player_name, status, reason)` tuples. If
+the helper signatures don't accommodate this test, STOP and report rather than modifying
+`tests/helpers.py` (helpers are out of scope for this plan).
+
+**Re-key regression check (Step 3c):** the existing absence tests were read during this
+review and none change behavior under the GAME_ID→DATE re-key, because in every one each
+player's DATE maps 1:1 to its GAME_ID:
+- `test_conflict_rows_excluded_box_score_wins` — box score and conflicting absence share
+  `(PLAYER_ID=50, DATE=2025-11-01)`, so the DATE-keyed conflict filter still drops row 50
+  and keeps row 60. Passes unchanged.
+- `test_dedup_across_files_in_one_run` / `test_rerun_with_same_file_...` — distinct DATEs
+  give distinct keys exactly as distinct GAME_IDs did. Pass unchanged.
+- `test_game_id_normalization_matches_player_logs` — joins `ON a.GAME_ID = p.GAME_ID` and
+  asserts stored GAME_ID type; **unaffected** because GAME_ID remains a stored column.
+If, contrary to this, any existing absence test fails after Step 3c, STOP and report — do
+not weaken the test to make it pass.
 
 **Verify**: `python3 -m pytest -q tests/test_absence_ingestion.py` → all pass (9 existing + 1 new).
 
@@ -400,7 +479,8 @@ ALL must hold:
 - [ ] `python3 -m pytest -q` exits 0 with 3 new tests in scope
 - [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("player_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
 - [ ] On a test DB: `sqlalchemy.inspect(engine).get_indexes("fantasy_logs")` returns at least one index with "player_date" in the name **and `unique == True`**
-- [ ] On a test DB (after an absence insert): `sqlalchemy.inspect(engine).get_indexes("player_absences")` returns at least one index with "player_game" in the name **and `unique == True`**
+- [ ] On a test DB (after an absence insert): `sqlalchemy.inspect(engine).get_indexes("player_absences")` returns at least one index with "player_date" in the name **and `unique == True`**
+- [ ] `absence_ingestion.py`'s dedup + conflict-filter keys are built from DATE, not GAME_ID (Step 3c); all 9 existing `test_absence_ingestion` tests still pass unchanged
 - [ ] No change to `check_ingest_duplicates.py` or any export script (`git diff --name-only`)
 - [ ] `plans/README.md` status row for 012 updated
 
@@ -411,13 +491,19 @@ Stop and report back (do not improvise) if:
 - Step 1 shows existing duplicates on the live DB that cannot be removed by
   `check_ingest_duplicates.py --remove` (e.g. the script itself errors). Do not
   proceed past Step 1 until the live DB is clean.
-- `CREATE UNIQUE INDEX` on the live `player_logs` fails with `UNIQUE constraint failed`
-  — this means `check_ingest_duplicates.py --remove` did not fully clean the table.
-  Investigate and re-run it.
+- `CREATE UNIQUE INDEX` on the live `player_logs`, `fantasy_logs`, or `player_absences`
+  fails with `UNIQUE constraint failed` — this means `check_ingest_duplicates.py --remove`
+  did not fully clean that table. Investigate and re-run it. For `player_absences`
+  specifically, a failure here can mean the table currently holds two rows sharing
+  `(PLAYER_ID, DATE)` but with different `GAME_ID` — the old GAME_ID dedup allowed that but
+  the new DATE index (and `check_ingest_duplicates`, which already keys absences on DATE)
+  will not. `--remove` keeps `MIN(rowid)` per `(PLAYER_ID, DATE)`; if the two rows differ in
+  other columns, review before removing.
 - The `try/except "no such table"` block in the updated `initialize_database()` swallows
   a different `OperationalError` that should propagate. Confirm the specific string
   `"no such table"` is in `str(e)` before suppressing.
-- Any previously passing test starts failing after the code changes in Steps 2–3.
+- Any previously passing test starts failing after the code changes in Steps 2–3c. (Per the
+  Step 5b re-key regression check, none should — investigate rather than editing the test.)
 
 ## Maintenance notes
 
