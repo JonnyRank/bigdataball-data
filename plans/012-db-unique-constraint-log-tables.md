@@ -158,23 +158,17 @@ regresses.
 
 ### Step 1: Verify the live DB is clean (pre-deployment check — do before any code change)
 
-On the developer's machine, run:
-```bash
-python3 check_ingest_duplicates.py
-```
-- Exit 0 → DB is clean, safe to proceed.
-- Non-zero → run `python3 check_ingest_duplicates.py --remove` to deduplicate first,
-  then re-run the summary pipeline (`python3 create_summary_tables.py` etc.) to
-  recompute averages from deduplicated data. Only then proceed.
+Do these in order. **Step 1a must run before any `--remove`** — `--remove` is destructive and
+the preflight is what makes it safe for `player_absences`.
 
-**Step 1a (CRITICAL — do before any `--remove`): preflight `player_absences` for
+**Step 1a (CRITICAL — run first, before any `--remove`): preflight `player_absences` for
 distinct-GAME_ID collisions.** `check_ingest_duplicates.py` groups `player_absences` on
 `(PLAYER_ID, DATE)` and `--remove` keeps only `MIN(rowid)` per group — so if the live table
 holds two absence rows sharing `(PLAYER_ID, DATE)` but with **different `GAME_ID`** (allowed
 under plan 013's old GAME_ID dedup, but a data anomaly given one game per team per day),
-`--remove` would silently **delete one of them**. Run this query first and STOP for manual
-review if it returns any rows — do NOT run `--remove` on `player_absences` until a human has
-decided which row is correct:
+`--remove` would silently **delete one of them**. Run this query FIRST and STOP for manual
+review if it returns any rows — do NOT run `--remove` until a human has decided which row is
+correct:
 ```sql
 SELECT "PLAYER_ID", "DATE", COUNT(DISTINCT "GAME_ID") AS distinct_games, COUNT(*) AS rows
 FROM player_absences
@@ -182,8 +176,18 @@ GROUP BY "PLAYER_ID", "DATE"
 HAVING COUNT(DISTINCT "GAME_ID") > 1;
 ```
 Expected on a healthy DB: zero rows. If non-empty, these are genuine box-score/feed anomalies
-— resolve them by hand (keep the correct game), then proceed. (The post-`--remove`
+— resolve them by hand (keep the correct game) before continuing. (The post-`--remove`
 index-creation STOP condition is too late on its own: the row would already be gone.)
+
+**Step 1b (only after Step 1a returns zero rows): check and, if needed, deduplicate.**
+```bash
+python3 check_ingest_duplicates.py
+```
+- Exit 0 → DB is clean, safe to proceed.
+- Non-zero → **only because Step 1a returned zero rows is `--remove` safe** — now run
+  `python3 check_ingest_duplicates.py --remove` to deduplicate, then re-run the summary
+  pipeline (`python3 create_summary_tables.py` etc.) to recompute averages from deduplicated
+  data. Only then proceed. If Step 1a was non-empty and unresolved, do NOT run `--remove`.
 
 **This step is only needed for the live database. In CI / tests, the DB is fresh.**
 
@@ -492,26 +496,38 @@ def test_unique_index_exists_on_player_absences(player_upload):
     assert matching[0]["column_names"] == ["PLAYER_ID", "DATE"], matching[0]
 ```
 
-Add a second test that proves the *dedup behavior* is keyed on DATE (not GAME_ID) — two
-absence rows with the same `(PLAYER_ID, DATE)` but different `GAME_ID` must collapse to one
-row. Under the old GAME_ID key both would survive; under the new DATE key only one does:
+Add a second test that proves the *dedup behavior* is keyed on DATE (not GAME_ID). **Use two
+files, not one:** the in-memory dedup only filters incoming rows against `existing_keys`
+(rows already in the DB or inserted by an earlier file this run) — it does NOT drop
+same-key rows *within* a single file (see the Step 3b behavior-change note). So to exercise
+the dedup path, the second file must carry the same `(PLAYER_ID, DATE)` under a different
+`GAME_ID`. Under DATE keying the second file's row is dropped (its key is already in
+`existing_keys`) → 1 row, no error. Under GAME_ID keying it would survive and the second
+`to_sql` would raise `IntegrityError` against the `(PLAYER_ID, DATE)` index. This mirrors the
+existing `test_dedup_across_files_in_one_run` pattern:
 
 ```python
 def test_absence_dedup_is_keyed_on_date_not_game_id(player_upload):
-    """Two absence rows sharing (PLAYER_ID, DATE) but with different GAME_IDs must
-    dedup to a single row — proving the in-memory key is DATE-based, not GAME_ID-based."""
+    """Across two files in one run, a second absence row sharing (PLAYER_ID, DATE)
+    with the first but under a DIFFERENT GAME_ID must be deduped away — proving the
+    in-memory key (and the index it must agree with) is DATE-based, not GAME_ID-based."""
     mod = player_upload
     player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
-    # Same player (99) and DATE, two different GAME_IDs. No box score for player 99,
-    # so the conflict filter does not remove either; only the DATE dedup applies.
-    absence_rows = make_absence_rows([
+    # No box score for player 99, so the conflict filter doesn't touch it; only the
+    # cross-file DATE dedup applies. Same player + DATE, different GAME_ID per file.
+    file1_absences = make_absence_rows([
         ("2025-11-01", 22500001, "Houston", "Dallas", 99, "Beta Bench", "DND", "REST"),
+    ])
+    file2_absences = make_absence_rows([
         ("2025-11-01", 22500002, "Houston", "Dallas", 99, "Beta Bench", "DND", "REST"),
     ])
     write_player_xlsx_with_absences(
-        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), player_rows, absence_rows
+        os.path.join(mod.NEW_FILES_FOLDER, "feed_01.xlsx"), player_rows, file1_absences
     )
-    mod.main()  # must NOT raise IntegrityError — the in-memory DATE dedup drops the 2nd row
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed_02.xlsx"), player_rows, file2_absences
+    )
+    mod.main()  # processes both files (sorted); must NOT raise — feed_02's row is deduped
 
     absence_dates = pd.read_sql_query(
         "SELECT PLAYER_ID, DATE FROM player_absences WHERE PLAYER_ID = 99", mod.engine
@@ -519,10 +535,11 @@ def test_absence_dedup_is_keyed_on_date_not_game_id(player_upload):
     assert len(absence_dates) == 1, f"Expected 1 row (DATE-keyed dedup); got {len(absence_dates)}"
 ```
 
-Note this also confirms the in-memory filter and the UNIQUE index agree: if the dedup were
-still GAME_ID-keyed, both rows would pass the filter and the second `to_sql` would raise
-`IntegrityError` against the `(PLAYER_ID, DATE)` index — so a failure here signals Step 3c
-was not applied (or was applied inconsistently with Step 3b).
+A failure here (either `IntegrityError` from `mod.main()`, or 2 rows) signals Step 3c was not
+applied or is inconsistent with Step 3b. This is consistent with — not contradicted by — the
+Step 3b within-file note: within *one* file two same-key rows still raise `IntegrityError`
+(the filter never dedups within a file); the collapse only happens *across* files/runs, which
+is exactly what this test exercises.
 
 **Before writing these tests, read the existing tests in `tests/test_absence_ingestion.py`**
 — the `make_rows`, `make_absence_rows`, and `write_player_xlsx_with_absences` call shapes
@@ -563,8 +580,9 @@ Four new regression tests:
   — after the first absence insert, the unique `["PLAYER_ID", "DATE"]` index exists on
   `player_absences`.
 - `tests/test_absence_ingestion.py::test_absence_dedup_is_keyed_on_date_not_game_id`
-  — two same-`(PLAYER_ID, DATE)`, different-`GAME_ID` absence rows collapse to one,
-  proving the dedup key is DATE (behavioral complement to the metadata assertions).
+  — across two files in one run, a second same-`(PLAYER_ID, DATE)`/different-`GAME_ID`
+  absence row is deduped away (1 row, no `IntegrityError`), proving the dedup key is DATE
+  (behavioral complement to the metadata assertions).
 
 These tests verify the index existence and columns (via `sqlalchemy.inspect`) AND the
 correctness of the DATE-keyed dedup behavior (row count). They use the existing fixtures — no
@@ -610,6 +628,28 @@ Stop and report back (do not improvise) if:
   silently skips the index creation (table not yet created). The `ensure_unique_index()`
   call immediately after `to_sql()` in `main()` covers this: the index is created from the
   very first insert, not deferred to the second run.
+- **First-batch protection is after-the-fact, by design (accepted tradeoff)**: on the
+  first-ever run the table is created *and populated* by `to_sql()` before the index exists,
+  so the index is created right after. If the first batch itself contained a
+  `(PLAYER_ID, DATE)` duplicate, it would be inserted and then the index creation would fail
+  loudly with `IntegrityError` — caught after the fact, not prevented. This is acceptable
+  because the in-memory dedup already removes duplicates from the batch; a duplicate in the
+  first batch is only possible if that dedup is *already* regressed, which is exactly what
+  the backstop exists to surface (loudly). Fully preventing the insert would require an
+  explicit `CREATE TABLE` schema in `initialize_database()` (so the index can pre-exist the
+  first insert) instead of letting `to_sql` infer the schema — a larger change deliberately
+  out of scope for this "add a backstop index" plan. If a future change moves table creation
+  to explicit DDL, create the unique index in that same DDL.
+- **`CREATE UNIQUE INDEX IF NOT EXISTS` is name-only — acceptable here because the name is
+  plan-owned.** `idx_<table>_player_date` is introduced by this plan and is only ever created
+  as `UNIQUE ("PLAYER_ID", "DATE")` by this same code, so there is no path where the name
+  pre-exists with different columns or without uniqueness (plan 013 created no index on
+  `player_absences`; the reconcile-era GAME_ID draft used a *different* name,
+  `..._player_game`). The regression tests additionally assert
+  `column_names == ["PLAYER_ID", "DATE"]` and `unique == True`, so any accidental mismatch
+  would fail CI. Reflect-and-repair logic (inspecting an existing index's definition) is
+  therefore unnecessary complexity for this backstop; revisit only if index names ever become
+  non-plan-owned or hand-created.
 - **`check_ingest_duplicates.py --remove`** removes duplicates with an in-place
   `DELETE ... WHERE rowid NOT IN (SELECT MIN(rowid) ...)` — it does NOT drop or recreate
   the table. The unique indexes are preserved automatically because the schema is untouched.
