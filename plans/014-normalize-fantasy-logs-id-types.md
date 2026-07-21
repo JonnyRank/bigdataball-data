@@ -119,9 +119,18 @@ removes any remaining null-ID rows, so `.astype(int)` cannot hit a `NaN`:
 ```python
 # Normalize ID columns to integers so fantasy_logs matches player_logs /
 # player_absences (which store PLAYER_ID / GAME_ID as INTEGER). Rows missing
-# an ID are not valid player-game logs -> drop them before casting.
+# an ID are not valid player-game logs -> drop them before casting, but NEVER
+# silently: a missing ID "can" happen and must be visible when it does.
 id_cols = [c for c in ("PLAYER_ID", "GAME_ID") if c in cleaned_data.columns]
-cleaned_data = cleaned_data.dropna(subset=id_cols)
+missing_mask = cleaned_data[id_cols].isna().any(axis=1)
+dropped = int(missing_mask.sum())
+if dropped:
+    print(
+        f"  > WARNING: dropping {dropped} fantasy row(s) in {file_name} with a "
+        f"missing {id_cols} value (not a valid player-game log)."
+    )
+    fantasy_rows_dropped += dropped  # run-level counter, surfaced in the email (below)
+    cleaned_data = cleaned_data.loc[~missing_mask]
 for c in id_cols:
     # Reject fractional IDs rather than silently truncating them: astype(int)
     # would turn a corrupt 12345.7 into 12345 (a different, valid-looking player).
@@ -147,6 +156,21 @@ truly_new_logs_df.to_sql(
 (`dtype` only takes effect when `to_sql` creates the table; on append to an existing table it
 is ignored — that is why Step 3 must rebuild the existing table.)
 
+**Surface the drop (required — must not be silent).** The daily pipeline runs headless, so a
+`print()` alone isn't enough visibility; thread the drop count into the email report the way
+`absence_rows_count` already is:
+- Initialize `fantasy_rows_dropped = 0` once **before** the per-file loop (alongside
+  `fantasy_logs_count = 0` / `fantasy_logs_overwritten = 0` at `daily_fantasy_log_upload.py:138-139`).
+  The `fantasy_rows_dropped += dropped` line in the cast block accumulates across files.
+- In the success-email body (built at `:349-354`), add a line mirroring the existing count
+  lines, e.g. `f"Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): {fantasy_rows_dropped}\n"`.
+  If `fantasy_rows_dropped > 0`, also append a `--- WARNING ---`-style note (mirror the
+  unmatched-DK-players warning block at `:376-380`) so a non-zero drop is unmissable, and set
+  the `(With Warnings)` subject suffix that block already uses.
+- A drop is a data-quality signal, **not** a hard failure — do NOT append it to
+  `pipeline_errors` (that would mark the whole run "COMPLETED WITH ERRORS"); the count line +
+  warning note is the right severity.
+
 **Verify**: `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
 
 ### Step 3: One-time migration of the existing `fantasy_logs` table
@@ -171,7 +195,12 @@ engine = create_engine(f"sqlite:///{DB_PATH}")
 
 df = pd.read_sql_table("fantasy_logs", engine)
 id_cols = [c for c in ("PLAYER_ID", "GAME_ID") if c in df.columns]
+before = len(df)
 df = df.dropna(subset=id_cols)
+dropped = before - len(df)
+if dropped:
+    # Never drop silently — report it so a data anomaly is visible in the run log.
+    print(f"WARNING: dropped {dropped} fantasy_logs row(s) with a missing {id_cols} value.")
 for c in id_cols:
     frac = df[c][df[c] % 1 != 0]
     if not frac.empty:
@@ -183,7 +212,7 @@ df.to_sql(
     "fantasy_logs", engine, if_exists="replace", index=False,
     dtype={c: Integer() for c in id_cols},
 )
-print(f"Rewrote fantasy_logs: {len(df)} rows, {id_cols} cast to INTEGER.")
+print(f"Rewrote fantasy_logs: {len(df)} rows ({dropped} dropped), {id_cols} cast to INTEGER.")
 ```
 
 **Back up the DB first** (the same `.bak-*` habit `check_ingest_duplicates.py` uses), since
@@ -262,6 +291,13 @@ def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
     assert count_rows(mod.engine, "fantasy_logs") == 1
 ```
 Add `make_fantasy_rows` / `count_rows` to the file's imports if not already present.
+
+**On testing the missing-ID drop:** a unit test that feeds a data row with a null
+`PLAYER_ID`/`GAME_ID` and asserts the WARNING/count would need `write_fantasy_xlsx` to emit
+such a row, which the current helper can't express — and `tests/helpers.py` is out of scope
+(see the GAME_ID note below). The drop is instead surfaced at runtime (per-file `print`
+WARNING + the `Fantasy Rows Dropped` email line). If you want unit coverage, STOP and raise
+extending the helper rather than editing it unilaterally.
 
 **Note on GAME_ID:** the current `write_fantasy_xlsx` helper has no GAME_ID column, so a
 *dedicated* GAME_ID fixture is not added here (that would require editing the shared
