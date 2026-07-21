@@ -101,7 +101,10 @@ from sqlalchemy import create_engine, text, Integer
 ```
 
 In `main()`, after the player-name standardization block and **before** the dedup key is
-built (`:207`), drop rows missing an ID and cast the present ID column(s) to int:
+built (`:207`), drop rows missing an ID and cast the present ID column(s) to int. The one
+ordering that matters: this must land **after** the `iloc[1:]` dummy-row drop (`:147`) — by
+that point the fixture's placeholder `None` row is already gone, and `dropna(subset=id_cols)`
+removes any remaining null-ID rows, so `.astype(int)` cannot hit a `NaN`:
 ```python
 # Normalize ID columns to integers so fantasy_logs matches player_logs /
 # player_absences (which store PLAYER_ID / GAME_ID as INTEGER). Rows missing

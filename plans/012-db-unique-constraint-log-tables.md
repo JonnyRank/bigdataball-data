@@ -300,6 +300,14 @@ which zero absence rows survive the filters never calls `to_sql` and therefore m
 create the index — that is acceptable: no insert happened, so nothing slipped past the
 constraint on that run.
 
+**Behavior-change note**: `ingest_absences` dedups incoming rows only against
+`existing_keys` (`:149`), not against each other within one file. With this new UNIQUE
+index, a *single feed* that contains two rows sharing `(PLAYER_ID, DATE)` would now fail the
+insert with `IntegrityError` (caught by the caller's try/except → file not archived), rather
+than silently double-inserting as it does today. One-game-per-day makes this near-impossible
+in real data, and that loud failure is the intended backstop — but be aware it is a change
+from the prior silent behavior.
+
 **Verify**: `python3 -m py_compile absence_ingestion.py` → exit 0.
 
 ### Step 3c: Re-key the absence dedup and box-score conflict filter from GAME_ID to DATE
@@ -326,14 +334,17 @@ before any key is built, so string keys are stable. Change three spots:
 
 3. **`_load_box_score_keys` (`:68-84`)** — select and key on DATE, and drop the now-unneeded
    `"no such column"` tolerance (DATE is always present in `player_logs`), but KEEP the
-   `"no such table"` tolerance:
+   `"no such table"` tolerance (a standalone `backfill_player_absences.py` run can call this
+   before any box scores exist — it must return an empty set, not raise). Intended final
+   form:
    ```python
-   df = pd.read_sql('SELECT "PLAYER_ID", "DATE" FROM player_logs', engine)
-   return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
-   # except Exception as e:
-   #     if "no such table" in str(e):
-   #         return set()
-   #     raise
+   try:
+       df = pd.read_sql('SELECT "PLAYER_ID", "DATE" FROM player_logs', engine)
+       return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
+   except Exception as e:
+       if "no such table" in str(e):
+           return set()
+       raise
    ```
    This is the one genuine behavior change: the box-score-wins conflict filter now matches
    absences to box scores on `(PLAYER_ID, DATE)` instead of `(PLAYER_ID, GAME_ID)`. Because
