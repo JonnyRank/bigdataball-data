@@ -108,7 +108,7 @@ def fantasy_upload(tmp_path, monkeypatch):
 
 **`daily_fantasy_log_upload.py`** — behaviors being tested:
 
-Name standardization (lines 192-202):
+Name standardization (lines 228-234):
 ```python
 if "PLAYER" in cleaned_data.columns:
     changed_mask = cleaned_data["PLAYER"].isin(mappings.PLAYER_NAME_MAP)
@@ -116,7 +116,7 @@ if "PLAYER" in cleaned_data.columns:
     cleaned_data["PLAYER"] = cleaned_data["PLAYER"].replace(mappings.PLAYER_NAME_MAP)
 ```
 
-Column drops (lines 160-167):
+Column drops (list at line 193, applied at line 223):
 ```python
 columns_to_drop = [
     "FANDUEL", "YAHOO", "FOR_FANDUEL_FULL_ROSTER_CONTESTS",
@@ -124,12 +124,12 @@ columns_to_drop = [
 ]
 ```
 
-Date formatting (lines 181-183):
+Date formatting (lines 215-217):
 ```python
 cleaned_data["DATE"] = pd.to_datetime(cleaned_data["DATE"]).dt.strftime("%Y-%m-%d")
 ```
 
-Rename map (lines 168-179) — key renames:
+Rename map (dict at lines 201-219, applied at line 220) — key renames:
 ```python
 rename_map = {
     "BIGDATABALL_DATASET": "SEASON_SEGMENT",
@@ -139,8 +139,8 @@ rename_map = {
 }
 ```
 
-Player learning (lines 220-243): when `truly_new_logs_df` contains a PLAYER_ID not
-already in `dim_players`, that player is inserted.
+Player learning (new-player selection at lines 263-266, insert at lines 274-280): when
+`truly_new_logs_df` contains a PLAYER_ID not already in `dim_players`, that player is inserted.
 
 **Known name mapping (from `mappings.py`)**: `"GG Jackson"` → `"Gregory Jackson"`.
 Use this in the standardization test (same convention as `test_player_name_standardization_applied`
