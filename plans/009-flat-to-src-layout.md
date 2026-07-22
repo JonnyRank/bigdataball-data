@@ -8,7 +8,7 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 967d88a..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
+> `git diff --stat f142763..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
 > If any of the listed `.py` files, `pytest.ini`, or the workflow changed
 > since this plan was written, compare the "Current state" excerpts against
 > the live code before proceeding; on a mismatch, treat it as a STOP condition.
