@@ -250,3 +250,51 @@ def test_game_id_normalization_matches_player_logs(player_upload):
     )
     assert stored_game_id.iloc[0]["GAME_ID"] == 22500001
     assert stored_game_id.iloc[0]["t"] == "integer"
+
+
+def test_unique_index_exists_on_player_absences(player_upload):
+    """ensure_unique_index must create a unique index on player_absences after
+    the first absence insert."""
+    from sqlalchemy import inspect
+    mod = player_upload
+    player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    absence_rows = make_absence_rows([
+        ("2025-11-01", 22500001, "Houston", "Dallas", 99, "Beta Bench", "DNP", "COACH'S DECISION"),
+    ])
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), player_rows, absence_rows
+    )
+    mod.main()
+
+    inspector = inspect(mod.engine)
+    indexes = inspector.get_indexes("player_absences")
+    matching = [idx for idx in indexes if "player_date" in idx["name"]]
+    assert matching, f"Index not found. Indexes: {indexes}"
+    assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
+    assert matching[0]["column_names"] == ["PLAYER_ID", "DATE"], matching[0]
+
+
+def test_absence_dedup_is_keyed_on_date_not_game_id(player_upload):
+    """Across two files in one run, a second absence row sharing (PLAYER_ID, DATE)
+    with the first but under a DIFFERENT GAME_ID must be deduped away — proving the
+    in-memory key (and the index it must agree with) is DATE-based, not GAME_ID-based."""
+    mod = player_upload
+    player_rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    file1_absences = make_absence_rows([
+        ("2025-11-01", 22500001, "Houston", "Dallas", 99, "Beta Bench", "DND", "REST"),
+    ])
+    file2_absences = make_absence_rows([
+        ("2025-11-01", 22500002, "Houston", "Dallas", 99, "Beta Bench", "DND", "REST"),
+    ])
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed_01.xlsx"), player_rows, file1_absences
+    )
+    write_player_xlsx_with_absences(
+        os.path.join(mod.NEW_FILES_FOLDER, "feed_02.xlsx"), player_rows, file2_absences
+    )
+    mod.main()  # processes both files (sorted); must NOT raise — feed_02's row is deduped
+
+    absence_dates = pd.read_sql_query(
+        "SELECT PLAYER_ID, DATE FROM player_absences WHERE PLAYER_ID = 99", mod.engine
+    )
+    assert len(absence_dates) == 1, f"Expected 1 row (DATE-keyed dedup); got {len(absence_dates)}"

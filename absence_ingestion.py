@@ -7,6 +7,7 @@
 # at module level -- callers (the daily pipeline, the backfill CLI, and
 # tests) inject their own `engine` so it can be reused across contexts.
 import pandas as pd
+from sqlalchemy import text
 import mappings
 
 ABSENCES_TABLE_NAME = "player_absences"
@@ -50,15 +51,37 @@ def _sanitize_columns(columns):
     )
 
 
+def ensure_unique_index(engine):
+    """Unique index on (PLAYER_ID, DATE) — DB-level backstop for the in-memory
+    absence_key dedup. Safe to call before the table exists (guards `no such table`)
+    so an already-populated player_absences gets indexed even on a run that inserts
+    zero new rows; also called right after to_sql so a first-ever insert is covered."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_{ABSENCES_TABLE_NAME}_player_date
+                ON {ABSENCES_TABLE_NAME} ("PLAYER_ID", "DATE")
+                """
+                )
+            )
+    except Exception as e:
+        if "no such table" in str(e):
+            pass  # table not created yet; the post-to_sql call will create the index
+        else:
+            raise
+
+
 def load_existing_absence_keys(engine):
-    """Returns set of 'PLAYER_ID_GAMEID' keys already in player_absences.
+    """Returns set of 'PLAYER_ID_DATE' keys already in player_absences.
     Empty set if the table doesn't exist yet (first run)."""
     try:
         df = pd.read_sql(
-            f'SELECT DISTINCT "PLAYER_ID", "GAME_ID" FROM {ABSENCES_TABLE_NAME}',
+            f'SELECT DISTINCT "PLAYER_ID", "DATE" FROM {ABSENCES_TABLE_NAME}',
             engine,
         )
-        return set(df["PLAYER_ID"].astype(str) + "_" + df["GAME_ID"].astype(str))
+        return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
     except Exception as e:
         if "no such table" in str(e):
             return set()
@@ -66,20 +89,18 @@ def load_existing_absence_keys(engine):
 
 
 def _load_box_score_keys(engine):
-    """Returns set of 'PLAYER_ID_GAMEID' keys already present in player_logs
+    """Returns set of 'PLAYER_ID_DATE' keys already present in player_logs
     (box scores), used to resolve the box-score-wins conflict policy.
 
-    Tolerates BOTH a missing player_logs table AND a missing GAME_ID column
-    (some test fixtures / early-season data build player_logs without a
-    GAME_ID column) -- either case is treated as an empty key set rather
-    than raising, so absence ingestion never fails because box scores
-    haven't been loaded with a GAME_ID yet.
+    Tolerates a missing player_logs table (a standalone backfill_player_absences.py
+    run can call this before any box scores exist) -- treated as an empty key set
+    rather than raising.
     """
     try:
-        df = pd.read_sql('SELECT "PLAYER_ID", "GAME_ID" FROM player_logs', engine)
-        return set(df["PLAYER_ID"].astype(str) + "_" + df["GAME_ID"].astype(str))
+        df = pd.read_sql('SELECT "PLAYER_ID", "DATE" FROM player_logs', engine)
+        return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
     except Exception as e:
-        if "no such table" in str(e) or "no such column" in str(e):
+        if "no such table" in str(e):
             return set()
         raise
 
@@ -94,6 +115,11 @@ def ingest_absences(file_path, engine, existing_keys):
 
     Returns (inserted_count, sheet_found: bool).
     """
+    # Indexes an already-populated player_absences even on a run that ends up
+    # inserting zero new rows; no-ops (via the "no such table" guard) on a
+    # brand-new DB where the table doesn't exist yet.
+    ensure_unique_index(engine)
+
     try:
         df = pd.read_excel(file_path, sheet_name=ABSENCE_SHEET_NAME)
     except ValueError:
@@ -136,7 +162,7 @@ def ingest_absences(file_path, engine, existing_keys):
     )
 
     # --- Conflict filter: box score wins ---
-    df["absence_key"] = df["PLAYER_ID"].astype(str) + "_" + df["GAME_ID"].astype(str)
+    df["absence_key"] = df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str)
     box_score_keys = _load_box_score_keys(engine)
     conflict_mask = df["absence_key"].isin(box_score_keys)
     if conflict_mask.any():
@@ -186,6 +212,7 @@ def ingest_absences(file_path, engine, existing_keys):
         ]
     ]
     insert_df.to_sql(ABSENCES_TABLE_NAME, con=engine, if_exists="append", index=False)
+    ensure_unique_index(engine)  # idempotent; creates index on first run
 
     existing_keys.update(truly_new_df["absence_key"])
 
