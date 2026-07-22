@@ -95,10 +95,18 @@ def _load_box_score_keys(engine):
     Tolerates a missing player_logs table (a standalone backfill_player_absences.py
     run can call this before any box scores exist) -- treated as an empty key set
     rather than raising.
+
+    The absence side normalizes DATE to %Y-%m-%d (see ingest_absences), so the
+    stored player_logs.DATE is re-normalized here too before building the key --
+    otherwise a differently-formatted box-score DATE (e.g. "2025-11-01 00:00:00")
+    would silently fail to match and let an absence row through for a date the
+    player actually played. Mirrors daily_player_upload.py's own dedup, which
+    likewise re-normalizes stored DATE before comparing.
     """
     try:
         df = pd.read_sql('SELECT "PLAYER_ID", "DATE" FROM player_logs', engine)
-        return set(df["PLAYER_ID"].astype(str) + "_" + df["DATE"].astype(str))
+        dates = pd.to_datetime(df["DATE"]).dt.strftime("%Y-%m-%d")
+        return set(df["PLAYER_ID"].astype(str) + "_" + dates)
     except Exception as e:
         if "no such table" in str(e):
             return set()

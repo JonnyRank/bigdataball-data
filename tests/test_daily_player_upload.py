@@ -96,3 +96,25 @@ def test_unique_index_prevents_silent_duplicate(player_upload):
     assert matching, f"Index not found. Indexes: {indexes}"
     assert matching[0]["unique"], f"Index exists but is not UNIQUE: {matching[0]}"
     assert matching[0]["column_names"] == ["PLAYER_ID", "DATE"], matching[0]
+
+
+def test_unique_index_raises_on_duplicate_insert(player_upload):
+    """The core plan-012 guarantee: a duplicate that slips past the in-memory
+    dedup must fail loudly with IntegrityError instead of silently inflating
+    averages. Insert a genuine duplicate directly (bypassing mod.main's
+    in-memory key set) and assert the DB-level UNIQUE index rejects it."""
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    mod = player_upload
+    rows = make_rows([(1, "Alpha Player", "2025-11-01", 30)])
+    write_player_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()  # creates table + unique index, inserts 1 row
+
+    # Re-append the existing row straight to the DB, skipping the in-memory dedup.
+    dup = pd.read_sql_query("SELECT * FROM player_logs", mod.engine)
+    with pytest.raises(IntegrityError):
+        dup.to_sql("player_logs", con=mod.engine, if_exists="append", index=False)
+
+    # The rejected insert must not have added rows.
+    assert count_rows(mod.engine, "player_logs") == 1

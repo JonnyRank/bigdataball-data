@@ -115,7 +115,16 @@ def main():
     print("=== PLAYER LOGS COMPLETE ===\n")
 
     # --- STEP 2: Initialize DB for Fantasy Logs ---
-    initialize_database()
+    # ensure_unique_index() (via initialize_database) can raise on a pre-existing
+    # (PLAYER_ID, DATE) duplicate in fantasy_logs. Record the failure like every
+    # other stage so the run still reaches the summary/export steps and fires the
+    # notification email, rather than crashing the orchestrator unhandled.
+    try:
+        initialize_database()
+    except Exception as e:
+        error_msg = f"CRITICAL ERROR in Fantasy DB Initialization: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
 
     # --- Pre-load existing logs ---
     # Try to load the logs that are already in the database.
