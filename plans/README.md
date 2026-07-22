@@ -75,8 +75,15 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   `patch_absence_column_names`; 012 added `create_log_indexes`), so after it lands the
   in-scope file paths in plans 010/011/014 change from `<module>.py` to
   `src/bigdataball/<module>.py` (logic and line numbers unchanged).
-  Two orderings work: (a) do 010/011/014 first, then 009 last — no rebasing needed; or (b) do
-  009 now (as requested) and prepend `src/bigdataball/` to the paths when executing the others.
+  Two orderings work: (a) do 010/011/014 first, then 009 last — no rebasing needed (this is
+  why the downstream plans' drift checks and in-scope lists cite root-level `<module>.py`: they
+  are written against the recommended default state, before 009 lands); or (b) do 009 now (as
+  requested), in which case prepend `src/bigdataball/` to every module path when executing the
+  others — this includes the `git diff … --` **drift-check command** at the top of plans
+  010/011/014 and their in-scope file lists (e.g. `daily_fantasy_log_upload.py` →
+  `src/bigdataball/daily_fantasy_log_upload.py`). Line numbers and logic are unchanged either
+  way. Do **not** pre-rewrite the downstream plans to `src/` paths — that would break ordering
+  (a), the default.
   The `__file__`-based `Data/` fallback still lives in exactly **two** files — `paths.py` (the
   live one, from plan 005) and `seed_map_teams.py` (a dead-after-conversion fallback in its
   `except` branch) — so Step 3 of plan 009 deepens both. `create_log_indexes.py` delegates

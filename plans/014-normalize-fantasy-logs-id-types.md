@@ -199,13 +199,25 @@ precedent from plan 013 — read it for the path-resolution / engine idiom). It 
 1. Load the whole `fantasy_logs` table into pandas.
 2. Drop rows with a null `PLAYER_ID` (or `GAME_ID` if present), then cast the present ID
    column(s) to int.
-3. Write it back with `to_sql(LOGS_TABLE_NAME, engine, if_exists="replace", index=False,
-   dtype={...Integer()...})` so the recreated table has INTEGER affinity.
+3. Write it back with `if_exists="replace"` + `dtype={...Integer()...}` so the recreated table
+   has INTEGER affinity, **and re-create plan 012's UNIQUE index in the same transaction** (see
+   the atomicity note below).
 
-Sketch:
+**Back up the DB first** (the same `.bak-*` habit `check_ingest_duplicates.py` uses), since
+`if_exists="replace"` drops the table. The backup is the ultimate safety net.
+
+**Make the rebuild + index recreation atomic (required — plan 012 is DONE).** Plan 012
+(merged `#43`) created `idx_fantasy_logs_player_date`, a UNIQUE index on
+`fantasy_logs("PLAYER_ID", "DATE")`. `to_sql(if_exists="replace")` DROPS the table and its
+index, so the migration MUST re-create it — and it must do so in the **same transaction** as
+the rebuild. Otherwise a `to_sql` that commits on its own engine connection followed by a
+*separate* index-creation transaction can fail in between, leaving the table replaced but the
+UNIQUE dedup backstop silently absent. SQLite has transactional DDL, so passing the open
+`Connection` to `to_sql` enrolls its DROP/CREATE in one `engine.begin()` block that rolls back
+both operations together on any failure. Sketch:
 ```python
 import pandas as pd
-from sqlalchemy import create_engine, Integer
+from sqlalchemy import create_engine, Integer, text
 import os, paths
 
 DB_PATH = os.path.join(paths.resolve_base_data_path(), "nba_fantasy_logs.db")
@@ -226,33 +238,28 @@ for c in id_cols:
             f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
         )
     df[c] = df[c].astype(int)
-df.to_sql(
-    "fantasy_logs", engine, if_exists="replace", index=False,
-    dtype={c: Integer() for c in id_cols},
-)
-print(f"Rewrote fantasy_logs: {len(df)} rows ({dropped} dropped), {id_cols} cast to INTEGER.")
-```
 
-**Back up the DB first** (the same `.bak-*` habit `check_ingest_duplicates.py` uses), since
-`if_exists="replace"` drops the table.
-
-**Re-create the UNIQUE index after the rebuild (required — plan 012 is DONE).** Plan 012
-(merged `#43`) created `idx_fantasy_logs_player_date`, a UNIQUE index on
-`fantasy_logs("PLAYER_ID", "DATE")`. `to_sql(if_exists="replace")` DROPS the table and its
-index, so the migration script MUST re-create it as its final step, or the DB-level dedup
-backstop silently disappears. Add this after the `to_sql(...replace...)` call, reusing plan
-012's own mechanism (`create_log_indexes.py` builds the exact same index):
-```python
-from sqlalchemy import text
+# Rebuild the table AND re-create plan 012's UNIQUE index in ONE transaction: passing the
+# open `conn` to to_sql means its DROP/CREATE TABLE runs inside this begin() block, so a
+# failure at either step rolls back both and the table is never left replaced-without-index.
 with engine.begin() as conn:
+    df.to_sql(
+        "fantasy_logs", conn, if_exists="replace", index=False,
+        dtype={c: Integer() for c in id_cols},
+    )
     conn.execute(text(
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_fantasy_logs_player_date '
         'ON fantasy_logs ("PLAYER_ID", "DATE")'
     ))
-print("Re-created UNIQUE index idx_fantasy_logs_player_date (dropped by the table rebuild).")
+print(
+    f"Rewrote fantasy_logs: {len(df)} rows ({dropped} dropped), {id_cols} cast to INTEGER; "
+    "re-created UNIQUE idx_fantasy_logs_player_date in the same transaction."
+)
 ```
-Equivalently, run `python3 create_log_indexes.py` once after the patch — it recreates the same
-index and refuses if duplicates exist. Verify with the Step-3 check below **plus**
+(`create_log_indexes.py` builds the same index and refuses if duplicates exist — running it once
+after the patch is a valid alternative to the inline `CREATE INDEX`, but it opens its own
+connection, so it is **not** atomic with the rebuild; prefer the single-transaction form above.)
+Verify with the Step-3 check below **plus**
 `SELECT name FROM sqlite_master WHERE type='index' AND name='idx_fantasy_logs_player_date'`
 returning one row.
 
