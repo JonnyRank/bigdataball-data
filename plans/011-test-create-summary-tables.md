@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 3844392..HEAD -- create_summary_tables.py tests/conftest.py`
+> **Drift check (run first)**: `git diff --stat f142763..HEAD -- create_summary_tables.py tests/conftest.py`
 > Compare the "Current state" excerpts against the live code before proceeding;
 > on a mismatch, treat it as a STOP condition.
 
@@ -24,6 +24,11 @@
   (`fantasy_upload` now starts at line 33, `player_upload` at line 84) — the `player_upload`
   fixture excerpt below is cited as a *pattern* to model a new fixture on and its content
   is unchanged, so only its line reference is stale. The full suite is now 47 tests (was 38).
+- **Re-verified at reconcile 2026-07-22 (`f142763`)**: `create_summary_tables.py` is still
+  unchanged (zero drift, zero test coverage) — the finding holds unchanged. Plan 012 touched
+  only `tests/conftest.py`/`tests/helpers.py` **above** these fixtures, so the cited fixture
+  line refs still hold (`fantasy_upload` line 33, `player_upload` line 84). The full suite is
+  now **52** tests (was 47) — none in `test_create_summary_tables.py`, which still does not exist.
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/29
 
 ## Why this matters
