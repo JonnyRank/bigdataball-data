@@ -10,6 +10,9 @@ four open TODO plans for the new module + test counts and the shifted line ancho
 **011** (target file unchanged — finding holds, suite 47→52); **014** (all
 `daily_fantasy_log_upload.py` anchors re-mapped, and Step 3 hardened to re-create plan 012's
 now-live unique index that its `if_exists="replace"` rebuild drops).
+Issue sync 2026-07-22: the four open tracking issues (`#28`/010, `#29`/011, `#32`/009,
+`#42`/014) were updated to the post-`#44` state, and this index now records plan 014's issue
+(`#42`, previously shown as "—").
 Previous reconcile 2026-07-19 against `967d88a` (plan 013 merged via `#38`; 47 tests).
 Earlier reconcile 2026-06-22 against `c2f810f` (plans 006/007/008 merged; 38 tests).
 Plans 010–012 added 2026-06-21 against commit `3844392` (post-006/007 state).
@@ -39,7 +42,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 011  | Add tests for `create_summary_tables.py` | P2 | L | none | TODO (re-verified 2026-07-22 @ `f142763`: `create_summary_tables.py` unchanged, still zero tests; conftest fixture line refs (33/84) still hold; suite 47→52) | [#29](https://github.com/JonnyRank/bigdataball-data/issues/29) |
 | 012  | Add DB-level UNIQUE constraint to log tables | P1 | M | none (run `check_ingest_duplicates --remove` first on live DB) | DONE (executed 2026-07-21 via sonnet executor, reviewer-approved; commit `221c0f4` fast-forwarded onto this branch, PR [#43](https://github.com/JonnyRank/bigdataball-data/pull/43) → main. All three tables indexed on **(PLAYER_ID, DATE)**; absence dedup + box-score filter re-keyed GAME_ID→DATE. Full suite 52 passed (47+5 new — follow-up commit `085893a` from the PR review added a direct `IntegrityError` enforcement test, normalized `player_logs.DATE` in `_load_box_score_keys`, and guarded the orchestrator's Step 2 `initialize_database()` call). **Deploy gate cleared 2026-07-21**: live-DB `check_ingest_duplicates.py` preflight run — zero duplicates in all three log tables, so the first `CREATE UNIQUE INDEX` will apply cleanly) | [#30](https://github.com/JonnyRank/bigdataball-data/issues/30) |
 | 013  | Ingest DNP-DND-NWT sheet into `player_absences` | P1 | M | 002/003 | DONE (2026-07-18 via `#38`; GAME_ID stored as INTEGER — documented deviation; post-merge correction renamed columns to `DATE`/`PLAYER` per repo convention. Verified 2026-07-19: wiring present in `daily_player_upload.py`, 9 `test_absence_ingestion` tests green. **Note 2026-07-21**: its GAME_ID absence dedup key is superseded by plan 012's re-key to (PLAYER_ID, DATE)) | — |
-| 014  | Normalize `fantasy_logs.PLAYER_ID`/`GAME_ID` to INTEGER | P2 | M | none (012 now DONE) | TODO (refreshed 2026-07-22 @ `f142763`: finding holds — `fantasy_logs` IDs still FLOAT/REAL vs INTEGER elsewhere. Plan 012 now DONE: all `daily_fantasy_log_upload.py` anchors re-mapped, and Step 3's `if_exists="replace"` rebuild must re-create plan 012's now-live UNIQUE `idx_fantasy_logs_player_date` — spelled out in the plan) | — |
+| 014  | Normalize `fantasy_logs.PLAYER_ID`/`GAME_ID` to INTEGER | P2 | M | none (012 now DONE) | TODO (refreshed 2026-07-22 @ `f142763`: finding holds — `fantasy_logs` IDs still FLOAT/REAL vs INTEGER elsewhere. Plan 012 now DONE: all `daily_fantasy_log_upload.py` anchors re-mapped, and Step 3's `if_exists="replace"` rebuild must re-create plan 012's now-live UNIQUE `idx_fantasy_logs_player_date` — spelled out in the plan) | [#42](https://github.com/JonnyRank/bigdataball-data/issues/42) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
