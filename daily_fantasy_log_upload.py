@@ -38,6 +38,28 @@ PLAYERS_TABLE_NAME = "dim_players"
 engine = create_engine(f"sqlite:///{DB_PATH}")
 
 
+def ensure_unique_index():
+    """Create the unique index on (PLAYER_ID, DATE) if the table exists.
+    Called from initialize_database() (existing tables) and after to_sql()
+    (first-run table creation), so the index is present from the very first insert.
+    """
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_{LOGS_TABLE_NAME}_player_date
+                ON {LOGS_TABLE_NAME} ("PLAYER_ID", "DATE")
+                """
+                )
+            )
+    except Exception as e:
+        if "no such table" in str(e):
+            pass  # table not yet created; to_sql will create it, then we call this again
+        else:
+            raise
+
+
 def initialize_database():
     """Creates the dim_players table if it doesn't exist."""
     with engine.connect() as conn:
@@ -53,6 +75,7 @@ def initialize_database():
         )
         # Also ensure the main logs table exists
         conn.commit()
+    ensure_unique_index()
 
 
 def main():
@@ -92,7 +115,16 @@ def main():
     print("=== PLAYER LOGS COMPLETE ===\n")
 
     # --- STEP 2: Initialize DB for Fantasy Logs ---
-    initialize_database()
+    # ensure_unique_index() (via initialize_database) can raise on a pre-existing
+    # (PLAYER_ID, DATE) duplicate in fantasy_logs. Record the failure like every
+    # other stage so the run still reaches the summary/export steps and fires the
+    # notification email, rather than crashing the orchestrator unhandled.
+    try:
+        initialize_database()
+    except Exception as e:
+        error_msg = f"CRITICAL ERROR in Fantasy DB Initialization: {e}"
+        print(f"*** {error_msg} ***")
+        pipeline_errors.append(error_msg)
 
     # --- Pre-load existing logs ---
     # Try to load the logs that are already in the database.
@@ -250,6 +282,7 @@ def main():
                 truly_new_logs_df.to_sql(
                     LOGS_TABLE_NAME, con=engine, if_exists="append", index=False
                 )
+                ensure_unique_index()  # idempotent; creates index on first run
                 # --- Crucial Update ---
                 # After adding new logs to the DB, we must also add their keys
                 # to our in-memory set to prevent them from being added again
