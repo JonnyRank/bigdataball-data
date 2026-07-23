@@ -30,7 +30,7 @@ Fully pinned. Key direct dependencies (the rest are transitive):
 | `python-dotenv` | 1.2.1 | Loads `.env` into `config.py` |
 | `requests` | 2.32.5 | HTTP (transitive use via google libs / general) |
 
-Standard-library modules used directly: `sqlite3` (raw access in `check_ingest_duplicates.py`, `run_db_patch.py`, `verify_db_patch.py`), `smtplib` + `email.message` (`email_notifier.py`), `argparse`, `glob`, `os`, `io`, `datetime`.
+Standard-library modules used directly: `sqlite3` (raw access in `check_ingest_duplicates.py`, `run_db_patch.py`, `verify_db_patch.py`, `create_log_indexes.py`), `smtplib` + `email.message` (`email_notifier.py`), `argparse`, `glob`, `os`, `io`, `datetime`.
 
 ## Dev / Test Tooling
 

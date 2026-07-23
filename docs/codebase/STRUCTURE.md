@@ -13,14 +13,19 @@ bigdataball-data/
 ├── patch_absence_column_names.py   # one-time: rename player_absences GAME_DATE/PLAYER_NAME → DATE/PLAYER
 ├── drive_ingestion.py              # download latest .xlsx from Google Drive
 ├── auth_manager.py                 # 3-legged Google OAuth helper
-├── config.py                       # paths, Drive job defs, email settings (loads .env)
+├── config.py                       # download dir, Drive job defs, email settings (loads .env)
+├── paths.py                        # resolve_base_data_path() — single path-resolution helper
 ├── mappings.py                     # PLAYER_NAME_MAP (variant → canonical name)
+├── seasons.py                      # SLATE_SEASONS / L30_SEASON / PLAYOFFS_SEASON constants
+├── dk_matching.py                  # shared DraftKings load + fuzzy-match helper (used by all exports)
+├── seed_map_teams.py               # create + populate the map_teams table
 ├── create_summary_tables.py        # build fantasy_averages + player-average views
 ├── export_slate_averages_vw.py     # build vw_daily_slate / vw_daily_slate_l30
 ├── export_playoffs_slate_averages_vw.py  # build vw_daily_slate_playoffs
 ├── export_slate_averages_csv.py    # export slate averages to timestamped CSV
 ├── email_notifier.py               # SMTP success/error notification
 ├── check_ingest_duplicates.py      # report/remove duplicate (PLAYER_ID, DATE) rows
+├── create_log_indexes.py           # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
 ├── run_db_patch.py                 # one-time retroactive player-name fix
 ├── verify_db_patch.py              # verify the name patch
 ├── requirements.txt / requirements-dev.txt
@@ -30,9 +35,8 @@ bigdataball-data/
 │   ├── __init__.py
 │   ├── conftest.py                 # `player_upload` fixture (env-seam fresh import)
 │   ├── helpers.py                  # synthetic .xlsx writers
-│   ├── test_daily_player_upload.py
-│   └── test_check_ingest_duplicates.py
-├── plans/                          # improve-skill handoff plans (001–009 + README index)
+│   └── test_*.py                   # 9 test modules, 56 tests (see TESTING.md)
+├── plans/                          # improve-skill handoff plans (001–014 + README index)
 ├── docs/codebase/                  # (this documentation)
 ├── *.sql                           # standalone/manual SQL (git-ignored via *.sql)
 ├── Data/                           # local fallback data dir (DB + archive folders)
@@ -55,14 +59,18 @@ All scripts are runnable directly (`python <script>.py`) and importable. There i
 | `export_playoffs_slate_averages_vw.py` `run_playoffs_slate_averages_pipeline()` | Builds `vw_daily_slate_playoffs`. |
 | `export_slate_averages_csv.py` `run_slate_averages_smart_export()` | Exports slate averages to timestamped CSVs in `csv_exports/`. |
 | `check_ingest_duplicates.py` `main()` | CLI (`--remove`, `--table`, `--vacuum`); exits non-zero when duplicates exist. |
+| `seed_map_teams.py` (CLI) | Creates + populates `map_teams` (`RAW_TEAM_NAME` → `TEAM_ABBREVIATION`). Run once on a fresh DB; `BIGDATABALL_SEED_FORCE=1` overwrites an existing populated table. |
+| `create_log_indexes.py` (CLI) | One-off backfill of the UNIQUE `(PLAYER_ID, DATE)` index on all three log tables (`--table` for one). Refuses to index a table that still has duplicates. |
 | `run_db_patch.py` / `verify_db_patch.py` | One-time retroactive name fix + verification. |
+| `patch_absence_column_names.py` (CLI) | One-time rename of `player_absences` `GAME_DATE`/`PLAYER_NAME` → `DATE`/`PLAYER`. |
 
 ## Key Files
 
-- **`config.py`** — single config module: `BASE_DOWNLOAD_DIR` (hardcoded `G:` path, no fallback), `DATASET_JOBS` (Drive folder IDs from env + filename match substrings), credential filenames, OAuth scopes, email settings.
+- **`config.py`** — Drive-ingestion config module: `BASE_DOWNLOAD_DIR` (hardcoded `G:` path, no fallback), `DATASET_JOBS` (Drive folder IDs from env + filename match substrings), credential filenames, OAuth scopes, email settings. (Data-*path* resolution for the DB lives in `paths.py`, not here.)
+- **`paths.py`** — `resolve_base_data_path()`, the single source of truth for the DB base path (`BIGDATABALL_DATA_DIR` env → `G:` mount → local `Data/`). Every DB-touching script imports it (plan 005).
 - **`mappings.py`** — `PLAYER_NAME_MAP` dict, the single source of truth for name standardization.
 - **`CLAUDE.md`** — the most authoritative human-written description of architecture and conventions (more current than the README/setup guide).
-- **`plans/README.md`** — index of the nine improve-skill plans with execution status (001–003 DONE, 004–009 TODO).
+- **`plans/README.md`** — index of the fourteen improve-skill plans with execution status (001–008, 010, 012, 013 DONE; 009/011/014 open — see the table there for the live state).
 
 ## Data Directories (under the resolved base path, git-ignored)
 
@@ -75,9 +83,9 @@ All scripts are runnable directly (`python <script>.py`) and importable. There i
 
 - `docs/codebase/.codebase-scan.txt` (directory tree, "No common entry points found")
 - `daily_fantasy_log_upload.py:69-399` (`main()` orchestration order)
-- `daily_player_upload.py:61-266` (`main()` returns `(processed, overwritten)`)
-- `config.py:1-36`
+- `daily_player_upload.py:74-302` (`main()` returns `(processed, overwritten, absences_count)`)
+- `config.py:1-36`, `paths.py` (`resolve_base_data_path`)
 - `mappings.py:5-17`
-- `plans/README.md:13-22` (plan statuses)
-- `tests/` directory (conftest, helpers, two test files)
+- `plans/README.md` (plan status table — 001–008/010/012/013 DONE, 009/011/014 open)
+- `tests/` directory (conftest, helpers, nine `test_*.py` modules — 56 tests)
 - `.gitignore:19-31` (`*.db`, `*.sql` ignored)
