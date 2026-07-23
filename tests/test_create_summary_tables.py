@@ -144,3 +144,18 @@ def test_run_summary_pipeline_creates_views(summary_tables):
     view_names = inspector.get_view_names()
     assert "vw_player_averages_regular_season" in view_names
     assert "vw_player_averages_playoffs" in view_names
+
+    # Existence isn't enough: assert each view's SEASON_TYPE filter actually
+    # partitions the data. The single seeded row is a regular-season game, so
+    # it must appear only in the regular-season view. A swapped/wrong WHERE
+    # predicate would pass the existence checks above but fail here.
+    regular_count = pd.read_sql_query(
+        "SELECT COUNT(*) AS count FROM vw_player_averages_regular_season",
+        mod.engine,
+    ).iloc[0]["count"]
+    playoff_count = pd.read_sql_query(
+        "SELECT COUNT(*) AS count FROM vw_player_averages_playoffs",
+        mod.engine,
+    ).iloc[0]["count"]
+    assert regular_count == 1
+    assert playoff_count == 0
