@@ -8,7 +8,7 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat f142763..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
+> `git diff --stat 2df899c..HEAD -- '*.py' pytest.ini .github/workflows/test.yml`
 > If any of the listed `.py` files, `pytest.ini`, or the workflow changed
 > since this plan was written, compare the "Current state" excerpts against
 > the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -18,7 +18,7 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: none (but see "Maintenance notes" — landing this rebases the file paths of the still-open plans 010–012; 003–008 are already merged)
+- **Depends on**: none. As of the 2026-07-23 reconcile every other plan (003–008, 010–014) is DONE and merged, so **009 is the last remaining plan** — nothing downstream needs rebasing onto it any more (see "Maintenance notes").
 - **Category**: tech-debt
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/32
 - **Planned at**: commit `c2f810f`, 2026-06-22 (refreshed for the merges of plans 006/007/008; prior bases `a852503` 2026-06-21 for plan 005's merge `#24`, `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh (2026-06-22):** plans 006/007/008 merged three new runtime modules — `dk_matching.py` (plan 006, `import mappings`), `seasons.py` (plan 007, no internal imports), and `seed_map_teams.py` (plan 008, a **lazy** `import paths` inside `main()`). Consequences for this plan, all handled below: (1) there are now **18** runtime modules to move, not 15; (2) the three export scripts no longer `import mappings` — they now `import dk_matching` and `import seasons` (Step 2 entries corrected); (3) `seed_map_teams.py` has a **second** `__file__`-based `Data/` fallback (line 166) inside its `except` branch, so Step 3 now deepens **two** files, not one; (4) plans 006/007/008 also added three test files (`test_dk_matching` 8, `test_seasons` 3, `test_seed_map_teams` 9) that `import` their module **at top level** and must be converted to `from bigdataball import <module>` (Step 6) → total test count is now **38**, not 18.
@@ -49,11 +49,30 @@
   with **no top-level module imports to convert** in Step 6. Total test count is now **52**, not
   47. All step-level counts and lists below have been updated in place to the 22-module /
   52-test state.
+- **Refresh (2026-07-23, reconcile @ `2df899c`)**: plans 010, 011, and 014 all merged since the
+  last refresh (PRs `#46`/`#48`/`#49`). Plan 014 added **one** new runtime module —
+  `patch_fantasy_id_types.py` (a one-time migration; `import paths` at **top level**, line 38) —
+  so there are now **23** modules to move, not 22. It carries **no** `__file__`-based path
+  fallback (it delegates to `paths`), so the Step 3 inventory of exactly two files (`paths.py`,
+  `seed_map_teams.py`) still holds — re-verified: `grep -rln
+  "os.path.dirname(os.path.abspath(__file__))" *.py` lists exactly those two. Its top-level
+  `import paths` becomes `from . import paths` in Step 2, and it is import-safe (all DB work is
+  inside `main()` behind `if __name__ == "__main__"`, line 169), so it joins the Step 7 smoke
+  list. Test count grew **52 → 68**: plan 011 added `tests/test_create_summary_tables.py`
+  (**5** tests), plan 014 added `tests/test_patch_fantasy_id_types.py` (**3** tests), and
+  `tests/test_daily_fantasy_log_upload.py` grew 2 → **10** (plans 010 +4, 014 +4). The two
+  **new** test files each drive their module via `importlib.import_module` / `sys.modules.pop`
+  on a **bare** module name and so **need** the `bigdataball.` prefix in Step 6 (details added
+  there); the grown `test_daily_fantasy_log_upload.py` still uses the `fantasy_upload` fixture by
+  injection — **no changes**. `daily_fantasy_log_upload.py` was edited by plan 014 but its
+  nine-line internal import block (lines 12–20) is **unchanged** — Step 2's excerpt still matches
+  live. All step-level counts and lists below have been updated in place to the 23-module /
+  68-test state.
 - **Earlier refresh (plan 005, `a852503`)**: plan 005 added `paths.py` and consolidated every per-script `PROJECT_ROOT`/`Data/`-fallback into `paths.resolve_base_data_path()`; nine modules now `import paths` and must become `from . import paths` (Step 2); the primary `__file__`-based path fix (Step 3) lives in `paths.py`; plan 005 added `tests/test_paths.py` (2 tests).
 
 ## Why this matters
 
-The repo is a flat collection of 22 top-level `.py` modules that import each
+The repo is a flat collection of 23 top-level `.py` modules that import each
 other by bare name (`import mappings`, `from auth_manager import ...`). A flat
 layout makes the importable code indistinguishable from scripts, config, and
 tests at the repo root, lets tests accidentally import from the working
@@ -69,9 +88,9 @@ No logic changes, no API changes, no new behavior.
 
 ## Current state
 
-All 22 runtime modules live at the repo root. Each is an importable module; most
+All 23 runtime modules live at the repo root. Each is an importable module; most
 are also runnable directly (`if __name__ == "__main__"`). The cross-module import
-graph (verified at commit `f142763`; line numbers are where the import appears):
+graph (verified at commit `2df899c`; line numbers are where the import appears):
 
 ```
 config.py                            (no internal imports)
@@ -82,6 +101,7 @@ dk_matching.py:3                     import mappings                       (plan
 absence_ingestion.py:10              import mappings                       (plan 013)
 backfill_player_absences.py:18-19    import absence_ingestion ; import paths   (plan 013)
 patch_absence_column_names.py:19     import paths                          (plan 013)
+patch_fantasy_id_types.py:38         import paths                          (plan 014)
 auth_manager.py:5                    import config
 email_notifier.py:3                  import config
 check_ingest_duplicates.py:77        import paths
@@ -200,10 +220,19 @@ matches: `paths.py:17` and `seed_map_teams.py:166`. If you find a third, STOP
   `tests.helpers` and uses the `player_upload` fixture via injection — **no direct
   `import_module` calls, no bare module-name strings, no changes needed**.
 - `tests/helpers.py`, `tests/__init__.py` need no changes.
-- **Total test count is 52** (11 absence_ingestion + 10 check_ingest + 6 player_upload +
-  2 fantasy_upload + 1 orchestrator_warnings + 2 paths + 8 dk_matching + 3 seasons +
-  9 seed_map_teams).
-  Plan 009 adds no tests and removes none; the executor should see 52 pass after the move.
+- `tests/test_create_summary_tables.py` (added by plan 011, 5 tests): its `summary_tables`
+  fixture drives the module via `sys.modules.pop("create_summary_tables", None)` (two
+  occurrences) and `importlib.import_module("create_summary_tables")` on a **bare** module name —
+  these **need** the `bigdataball.` prefix (Step 6).
+- `tests/test_patch_fantasy_id_types.py` (added by plan 014, 3 tests): its `patch_module`
+  fixture drives the module via `sys.modules.pop("patch_fantasy_id_types", None)` (two
+  occurrences), `sys.modules.pop("paths", None)` (one occurrence), and
+  `importlib.import_module("patch_fantasy_id_types")` — all on **bare** module names, so all
+  four **need** the `bigdataball.` prefix (Step 6).
+- **Total test count is 68** (11 absence_ingestion + 10 check_ingest + 6 player_upload +
+  10 fantasy_upload + 1 orchestrator_warnings + 2 paths + 8 dk_matching + 3 seasons +
+  9 seed_map_teams + 5 create_summary_tables + 3 patch_fantasy_id_types).
+  Plan 009 adds no tests and removes none; the executor should see 68 pass after the move.
 
 **CI**: `.github/workflows/test.yml` installs
 `pip install -r requirements.txt -r requirements-dev.txt` then runs
@@ -222,21 +251,22 @@ unchanged — only the import line changes, never the call sites.
 | Run tests | `python -m pytest -q` | all tests pass, exit 0 |
 | Editable install | `pip install -e .` | exit 0, `Successfully installed bigdataball-...` |
 | Import smoke test | (see Step 7) | prints `ALL IMPORTS OK`, exit 0 |
-| List package files | `ls src/bigdataball/` | the 22 modules + `__init__.py` |
+| List package files | `ls src/bigdataball/` | the 23 modules + `__init__.py` |
 | Confirm no stray root modules | `ls *.py` | `No such file or directory` (or only non-package files if any remain) |
 
 ## Scope
 
 **In scope** (the only files you should create, move, or modify):
 
-- Move (with `git mv`) these 22 files from repo root into `src/bigdataball/`:
+- Move (with `git mv`) these 23 files from repo root into `src/bigdataball/`:
   `absence_ingestion.py`, `auth_manager.py`, `backfill_player_absences.py`,
   `check_ingest_duplicates.py`, `config.py`, `create_log_indexes.py`,
   `create_summary_tables.py`, `daily_fantasy_log_upload.py`,
   `daily_player_upload.py`, `dk_matching.py`, `drive_ingestion.py`,
   `email_notifier.py`, `export_playoffs_slate_averages_vw.py`,
   `export_slate_averages_csv.py`, `export_slate_averages_vw.py`, `mappings.py`,
-  `patch_absence_column_names.py`, `paths.py`, `run_db_patch.py`, `seasons.py`,
+  `patch_absence_column_names.py`, `patch_fantasy_id_types.py`, `paths.py`,
+  `run_db_patch.py`, `seasons.py`,
   `seed_map_teams.py`, `verify_db_patch.py`
 - Create `src/bigdataball/__init__.py` (empty)
 - Create `pyproject.toml` (repo root)
@@ -282,7 +312,7 @@ unchanged — only the import line changes, never the call sites.
 
 ### Step 1: Create the package directory and move the modules
 
-Create `src/bigdataball/` and `git mv` all 22 in-scope modules into it. Then
+Create `src/bigdataball/` and `git mv` all 23 in-scope modules into it. Then
 create an empty `src/bigdataball/__init__.py`.
 
 ```bash
@@ -293,12 +323,12 @@ git mv absence_ingestion.py auth_manager.py backfill_player_absences.py \
        dk_matching.py drive_ingestion.py email_notifier.py \
        export_playoffs_slate_averages_vw.py export_slate_averages_csv.py \
        export_slate_averages_vw.py mappings.py patch_absence_column_names.py \
-       paths.py run_db_patch.py \
+       patch_fantasy_id_types.py paths.py run_db_patch.py \
        seasons.py seed_map_teams.py verify_db_patch.py src/bigdataball/
 touch src/bigdataball/__init__.py
 ```
 
-**Verify**: `ls src/bigdataball/` → lists the 22 modules plus `__init__.py`.
+**Verify**: `ls src/bigdataball/` → lists the 23 modules plus `__init__.py`.
 `ls *.py` at repo root → `No such file or directory` (no module files left at
 root). `python -m pytest -q` will FAIL here (imports not yet fixed) — that is
 expected; do not try to fix tests yet.
@@ -313,6 +343,7 @@ module-reference name used elsewhere in each file is unchanged — only the
 - `src/bigdataball/absence_ingestion.py`: `import mappings` → `from . import mappings`
 - `src/bigdataball/backfill_player_absences.py`: `import absence_ingestion` → `from . import absence_ingestion`; `import paths` → `from . import paths`
 - `src/bigdataball/patch_absence_column_names.py`: `import paths` → `from . import paths`
+- `src/bigdataball/patch_fantasy_id_types.py`: `import paths` → `from . import paths` (top-level, line 38)
 - `src/bigdataball/daily_player_upload.py`: `import absence_ingestion` → `from . import absence_ingestion`; `import mappings` → `from . import mappings`; `import paths` → `from . import paths`
 - `src/bigdataball/email_notifier.py`: `import config` → `from . import config`
 - `src/bigdataball/auth_manager.py`: `import config` → `from . import config`
@@ -486,6 +517,17 @@ break once the modules live under `bigdataball` — fix each as described below.
 - `sys.modules.pop("check_ingest_duplicates", None)` → `sys.modules.pop("bigdataball.check_ingest_duplicates", None)` (**both** occurrences)
 - `importlib.import_module("check_ingest_duplicates")` → `importlib.import_module("bigdataball.check_ingest_duplicates")`
 
+**`tests/test_create_summary_tables.py`** (added by plan 011): its `summary_tables` fixture
+uses the same pattern.
+- `sys.modules.pop("create_summary_tables", None)` → `sys.modules.pop("bigdataball.create_summary_tables", None)` (**both** occurrences)
+- `importlib.import_module("create_summary_tables")` → `importlib.import_module("bigdataball.create_summary_tables")`
+
+**`tests/test_patch_fantasy_id_types.py`** (added by plan 014): its `patch_module` fixture
+pops both the module and `paths` before importing.
+- `sys.modules.pop("patch_fantasy_id_types", None)` → `sys.modules.pop("bigdataball.patch_fantasy_id_types", None)` (**both** occurrences)
+- `sys.modules.pop("paths", None)` → `sys.modules.pop("bigdataball.paths", None)` (this pop forces a fresh re-import of the package's `paths` so the fixture's `BIGDATABALL_DATA_DIR` env var takes effect; after the move `paths` lives in `sys.modules` as `bigdataball.paths`)
+- `importlib.import_module("patch_fantasy_id_types")` → `importlib.import_module("bigdataball.patch_fantasy_id_types")`
+
 **`tests/test_paths.py`** (added by plan 005): two edits.
 
 1. Each of its two test functions has a local `import paths` line. Change both to
@@ -525,12 +567,13 @@ Do **not** change the `sys.argv = ["check_ingest_duplicates.py", ...]` lines —
 those are the simulated program name (`argv[0]`) and have no import meaning.
 Do **not** change `tests/test_daily_player_upload.py` or `tests/test_daily_fantasy_log_upload.py` — they use fixtures via injection and `from tests.helpers`, which remain valid.
 
-**Verify**: `grep -rn "import_module(\"daily_player_upload\")\|import_module(\"daily_fantasy_log_upload\")\|import_module(\"check_ingest_duplicates\")" tests/` → **no matches** (all now carry the `bigdataball.` prefix).
+**Verify**: `grep -rn "import_module(\"daily_player_upload\")\|import_module(\"daily_fantasy_log_upload\")\|import_module(\"check_ingest_duplicates\")\|import_module(\"create_summary_tables\")\|import_module(\"patch_fantasy_id_types\")" tests/` → **no matches** (all now carry the `bigdataball.` prefix).
+Also: `grep -rn 'sys.modules.pop("paths"' tests/` → **no matches** (the `test_patch_fantasy_id_types.py` pop is now keyed on `"bigdataball.paths"`).
 Also: `grep -n '"drive_ingestion"' tests/conftest.py` → **no matches** (key renamed to `"bigdataball.drive_ingestion"`).
 Also: `grep -n "^    import paths$" tests/test_paths.py` → **no matches** (both converted to `from bigdataball import paths`).
 Also: `grep -rnE "^import (dk_matching|seasons|seed_map_teams)$" tests/` → **no matches** (all three converted to `from bigdataball import <module>`).
 
-### Step 7: Import smoke test (all 22 modules)
+### Step 7: Import smoke test (all 23 modules)
 
 With the package installed (Step 4) confirm every module imports cleanly under
 the package namespace, including the relative imports. The command below is a
@@ -541,7 +584,7 @@ so the two modules that `os.makedirs(...)` at import time don't write into the
 repo:
 
 ```bash
-python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['absence_ingestion','auth_manager','backfill_player_absences','check_ingest_duplicates','config','create_log_indexes','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','dk_matching','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','patch_absence_column_names','paths','run_db_patch','seasons','seed_map_teams','verify_db_patch']]; print('ALL IMPORTS OK')"
+python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['absence_ingestion','auth_manager','backfill_player_absences','check_ingest_duplicates','config','create_log_indexes','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','dk_matching','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','patch_absence_column_names','patch_fantasy_id_types','paths','run_db_patch','seasons','seed_map_teams','verify_db_patch']]; print('ALL IMPORTS OK')"
 ```
 
 **Verify**: prints `ALL IMPORTS OK`, exit 0. If any module raises
@@ -559,11 +602,12 @@ fix it and re-run.
 
 ### Step 8: Run the full test suite
 
-**Verify**: `python -m pytest -q` → all **52 tests** pass, exit 0 (11
+**Verify**: `python -m pytest -q` → all **68 tests** pass, exit 0 (11
 `test_absence_ingestion`, 10 `test_check_ingest_duplicates`, 6
-`test_daily_player_upload`, 2 `test_daily_fantasy_log_upload`, 1
+`test_daily_player_upload`, 10 `test_daily_fantasy_log_upload`, 1
 `test_orchestrator_warnings`, 2 `test_paths`, 8 `test_dk_matching`, 3
-`test_seasons`, 9 `test_seed_map_teams`). This plan adds
+`test_seasons`, 9 `test_seed_map_teams`, 5 `test_create_summary_tables`, 3
+`test_patch_fantasy_id_types`). This plan adds
 no tests and removes none — if the count differs, something was moved or shadowed.
 If any test errors with a `ModuleNotFoundError` for `bigdataball.*` or `tests.*`,
 re-check Steps 5–6.
@@ -638,12 +682,12 @@ validated when the workflow runs).
 
 Machine-checkable. ALL must hold:
 
-- [ ] `ls src/bigdataball/__init__.py` exists; all 22 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
+- [ ] `ls src/bigdataball/__init__.py` exists; all 23 modules are under `src/bigdataball/`; `ls *.py` at repo root returns none.
 - [ ] `pip install -e .` exits 0.
 - [ ] `grep -rn -E "^import (mappings|paths|config|seasons|dk_matching|absence_ingestion|create_summary_tables|daily_player_upload|drive_ingestion|email_notifier|export_[a-z_]+)$|^from (auth_manager|config|mappings) import" src/bigdataball/` returns no matches, and `grep -rn "^[[:space:]]\+import paths$" src/bigdataball/` returns no matches (all internal imports relative, including the lazy one in `seed_map_teams.py` — same patterns as Step 2's verify).
 - [ ] `grep -rln "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))" src/bigdataball/` lists exactly two files, `src/bigdataball/paths.py` and `src/bigdataball/seed_map_teams.py` (both `Data/`-fallback path-resolutions, deepened per Step 3).
 - [ ] Step 7 import smoke test prints `ALL IMPORTS OK`.
-- [ ] `python -m pytest -q` exits 0 with exactly 52 tests passing.
+- [ ] `python -m pytest -q` exits 0 with exactly 68 tests passing.
 - [ ] `grep -rn "python [a-z_]*\.py" CLAUDE.md .github/copilot-instructions.md src/bigdataball/check_ingest_duplicates.py` returns no matches (docs **and** the `check_ingest_duplicates.py` docstring usage block all converted to `python -m bigdataball.`).
 - [ ] CI workflow `.github/workflows/test.yml` runs `pip install -e .` before the tests (see Step 10).
 - [ ] No files outside the in-scope list are modified (`git status`).
@@ -654,7 +698,7 @@ Machine-checkable. ALL must hold:
 Stop and report back (do not improvise) if:
 
 - The drift check shows any in-scope `.py` file, `pytest.ini`, or the workflow
-  changed since commit `f142763`, and the "Current state" excerpts no longer
+  changed since commit `2df899c`, and the "Current state" excerpts no longer
   match the live code.
 - After Step 2/3, the import smoke test (Step 7) still raises an import error you
   cannot trace to a missed relative-import or a missed `PROJECT_ROOT` line — the
@@ -672,15 +716,14 @@ Stop and report back (do not improvise) if:
 
 For the human/agent who owns this code after the change lands:
 
-- **This plan rebases the file paths of every still-open plan.** Plans 003–008 are
-  already DONE and merged, so the only remaining ones this affects are **010–012**,
-  which reference root-level files (e.g. `daily_fantasy_log_upload.py`,
-  `create_summary_tables.py`, `daily_player_upload.py`). After 009 lands, those same
-  files live at `src/bigdataball/...`. Their logic, line numbers, and excerpts are
-  otherwise unaffected (009 only moves files and changes import lines + the
-  `__file__`-fallback expressions). When executing 010–012 next, prepend
-  `src/bigdataball/` to their in-scope paths. The `plans/README.md` dependency notes
-  flag this.
+- **No downstream plans remain to rebase (as of 2026-07-23).** Plans 003–008 and
+  010–014 are all DONE and merged, so 009 no longer sits *before* any other plan —
+  it is the last one in the backlog. This note used to warn that executing 009
+  would shift the file paths of the then-open plans 010–012; that risk is gone now
+  that they have landed. (If a *new* plan is written against the flat layout before
+  009 executes, remember 009 will move every module into `src/bigdataball/` and
+  change import lines + the two `__file__`-fallback expressions — otherwise logic
+  and line numbers are unaffected.)
 - **Plan 005 is already DONE and merged (`#24`).** `paths.resolve_base_data_path()`
   already exists and is the single owner of the `Data/` fallback — Step 3 does not
   introduce it, it just *deepens* the `__file__`-relative resolution inside that
@@ -699,5 +742,3 @@ For the human/agent who owns this code after the change lands:
   repo root (Step 3), that `git mv` preserved history (`git log --follow` on a
   moved file), and that no logic changed inside any moved module beyond the
   import and `PROJECT_ROOT` lines (`git diff` should show only those).
-</content>
-</invoke>
