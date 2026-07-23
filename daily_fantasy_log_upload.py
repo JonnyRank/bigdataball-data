@@ -6,7 +6,7 @@
 #    and consolidating player naming convention changes into the players dimension
 # 4. Re-create database views after data is loaded.
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, Integer
 import glob
 import os
 import create_summary_tables
@@ -169,6 +169,7 @@ def main():
 
     fantasy_logs_count = 0
     fantasy_logs_overwritten = 0
+    fantasy_rows_dropped = 0
     for file_path in files_to_process:
         file_name = os.path.basename(file_path)
         print(f"--- Processing: {file_name} ---")
@@ -236,6 +237,31 @@ def main():
 
             # --- End of new transformation section ---
 
+            # --- NEW: Normalize ID columns to integers ---
+            # Normalize ID columns to integers so fantasy_logs matches player_logs /
+            # player_absences (which store PLAYER_ID / GAME_ID as INTEGER). Rows missing
+            # an ID are not valid player-game logs -> drop them before casting, but NEVER
+            # silently: a missing ID "can" happen and must be visible when it does.
+            id_cols = [c for c in ("PLAYER_ID", "GAME_ID") if c in cleaned_data.columns]
+            missing_mask = cleaned_data[id_cols].isna().any(axis=1)
+            dropped = int(missing_mask.sum())
+            if dropped:
+                print(
+                    f"  > WARNING: dropping {dropped} fantasy row(s) in {file_name} with a "
+                    f"missing {id_cols} value (not a valid player-game log)."
+                )
+                fantasy_rows_dropped += dropped  # run-level counter, surfaced in the email (below)
+                cleaned_data = cleaned_data.loc[~missing_mask]
+            for c in id_cols:
+                # Reject fractional IDs rather than silently truncating them: astype(int)
+                # would turn a corrupt 12345.7 into 12345 (a different, valid-looking player).
+                frac = cleaned_data[c][cleaned_data[c] % 1 != 0]
+                if not frac.empty:
+                    raise ValueError(
+                        f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
+                    )
+                cleaned_data[c] = cleaned_data[c].astype(int)
+
             # --- 4b. De-duplicate Logs ---
             # Create a unique key in both dataframes for comparison
             cleaned_data["log_key"] = (
@@ -280,7 +306,15 @@ def main():
                     f"Adding {len(truly_new_logs_df)} new game logs to {LOGS_TABLE_NAME}."
                 )
                 truly_new_logs_df.to_sql(
-                    LOGS_TABLE_NAME, con=engine, if_exists="append", index=False
+                    LOGS_TABLE_NAME,
+                    con=engine,
+                    if_exists="append",
+                    index=False,
+                    dtype={
+                        c: Integer()
+                        for c in ("PLAYER_ID", "GAME_ID")
+                        if c in truly_new_logs_df.columns
+                    },
                 )
                 ensure_unique_index()  # idempotent; creates index on first run
                 # --- Crucial Update ---
@@ -383,11 +417,23 @@ def main():
             "The daily ingestion pipeline completed successfully with no errors.\n\n"
             f"Player Logs Processed: {player_logs_count} (Overwritten: {player_logs_overwritten})\n"
             f"Fantasy Logs Processed: {fantasy_logs_count} (Overwritten: {fantasy_logs_overwritten})\n"
+            f"Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): {fantasy_rows_dropped}\n"
             f"Absence Rows Processed: {absence_rows_count}"
         )
 
+        if fantasy_rows_dropped > 0:
+            if " (With Warnings)" not in subject:
+                subject += " (With Warnings)"
+            body += "\n\n--- WARNING: Fantasy Rows Dropped ---\n"
+            body += (
+                f"{fantasy_rows_dropped} fantasy log row(s) were dropped this run because "
+                "they were missing a PLAYER_ID or GAME_ID value (not valid player-game logs). "
+                "See the console/log output for the affected file name(s)."
+            )
+
         if unmatched_dk_players:
-            subject += " (With Warnings)"
+            if " (With Warnings)" not in subject:
+                subject += " (With Warnings)"
 
             # --- NEW: Write to todo_mappings.txt ---
             todo_path = os.path.join(BASE_DATA_PATH, "todo_mappings.txt")

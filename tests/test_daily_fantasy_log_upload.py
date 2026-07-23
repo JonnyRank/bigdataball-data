@@ -111,3 +111,38 @@ def test_date_stored_as_iso_format(fantasy_upload):
 
     dates = pd.read_sql_query("SELECT DATE FROM fantasy_logs", mod.engine)["DATE"].tolist()
     assert dates == ["2025-11-01"]
+
+
+def test_player_id_stored_as_integer(fantasy_upload):
+    """fantasy_logs.PLAYER_ID must be stored as INTEGER, matching player_logs /
+    player_absences — not REAL (the pre-014 float-affinity bug)."""
+    mod = fantasy_upload
+    rows = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+
+    types = pd.read_sql_query(
+        "SELECT typeof(PLAYER_ID) AS t FROM fantasy_logs", mod.engine
+    )["t"].unique().tolist()
+    assert types == ["integer"], f"PLAYER_ID stored as {types}, expected ['integer']"
+
+    # If GAME_ID is present (real feed has it; the current test fixture does not),
+    # it must also be INTEGER. Conditional so the assertion no-ops when absent.
+    cols = pd.read_sql_query("SELECT * FROM fantasy_logs LIMIT 0", mod.engine).columns
+    if "GAME_ID" in cols:
+        gtypes = pd.read_sql_query(
+            "SELECT typeof(GAME_ID) AS t FROM fantasy_logs", mod.engine
+        )["t"].unique().tolist()
+        assert gtypes == ["integer"], f"GAME_ID stored as {gtypes}, expected ['integer']"
+
+
+def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
+    """The int cast must not break dedup: re-ingesting the same file inserts no
+    duplicate rows."""
+    mod = fantasy_upload
+    rows = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed2.xlsx"), rows)
+    mod.main()
+    assert count_rows(mod.engine, "fantasy_logs") == 1
