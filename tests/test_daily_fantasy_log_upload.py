@@ -162,3 +162,34 @@ def test_fractional_player_id_is_rejected_not_truncated(fantasy_upload):
     mod.main()  # feed_01 sorts first and is inserted; feed_02 is rejected.
 
     assert count_rows(mod.engine, "fantasy_logs") == 1
+
+
+def test_missing_player_id_row_dropped_counted_and_surfaced(fantasy_upload):
+    """A data row missing PLAYER_ID is not a valid player-game log: it is
+    dropped (not inserted), counted in fantasy_rows_dropped, and surfaced in the
+    success email as a '(With Warnings)' note -- WITHOUT failing the run."""
+    mod = fantasy_upload
+
+    captured = {}
+
+    def capture(subject, body):
+        captured["subject"] = subject
+        captured["body"] = body
+
+    # Override the module-scoped email suppression so we can inspect the report.
+    mod.email_notifier.send_email_alert = capture
+
+    rows = make_fantasy_rows([
+        (None, "Ghost Player", "2025-11-01"),  # missing PLAYER_ID -> dropped
+        (1, "Alpha Player", "2025-11-02"),      # valid -> inserted
+    ])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+
+    # Only the valid row landed; the null-ID row was dropped, not inserted.
+    assert count_rows(mod.engine, "fantasy_logs") == 1
+    # The drop was counted, surfaced in the body, and flagged in the subject --
+    # but it is NOT a hard failure (success email, not the error path).
+    assert "Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): 1" in captured["body"]
+    assert "(With Warnings)" in captured["subject"]
+    assert "SUCCESS" in captured["subject"]
