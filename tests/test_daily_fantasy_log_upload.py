@@ -94,11 +94,16 @@ def test_unwanted_columns_are_dropped(fantasy_upload):
     col_names = [col["name"] for col in inspector.get_columns("fantasy_logs")]
     assert "FANDUEL" not in col_names
     assert "DK_POINTS" in col_names
+    # The rename must preserve the value, not just the column name.
+    points = pd.read_sql_query("SELECT DK_POINTS FROM fantasy_logs", mod.engine)["DK_POINTS"].tolist()
+    assert points == [45.2]
 
 
 def test_date_stored_as_iso_format(fantasy_upload):
     mod = fantasy_upload
-    rows = make_fantasy_rows([(1, "Alpha", "11/01/2025")])
+    # Unambiguous non-ISO input proves format-agnostic normalization regardless
+    # of pandas' month-first parser default.
+    rows = make_fantasy_rows([(1, "Alpha", "November 1, 2025")])
     write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
 
     mod.main()
