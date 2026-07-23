@@ -17,7 +17,7 @@
 
 ## DraftKings (slate input)
 
-- **Not an API.** Export scripts read a user-supplied `DKEntries.csv` from `~/Downloads` (`os.path.expanduser("~") / "Downloads" / "DKEntries.csv"`). Header row is auto-detected by scanning the first 50 lines for `"Position"` + `"Name + ID"` (`export_slate_averages_vw.py:29-46`). DK player names are fuzzy-matched to DB names (`thefuzz`, score ≥ 90).
+- **Not an API.** Export scripts read a user-supplied `DKEntries.csv` from `~/Downloads` (`os.path.expanduser("~") / "Downloads" / "DKEntries.csv"`). The load, header auto-detection (scanning the first 50 lines for `"Position"` + `"Name + ID"`), and fuzzy matching to DB names (`thefuzz`, score ≥ 90) all live in the shared `dk_matching.py` helper (`find_dk_file_path`/`load_dk_names`/`match_names`), called by all three export scripts (`dk_matching.py:10-95`).
 
 ## Email Notification (Gmail SMTP)
 
@@ -58,7 +58,7 @@ No `.env.example`/`.env.template` is committed; required vars are read in `confi
 - `drive_ingestion.py:15-95` (Drive query/download)
 - `config.py:7-35` (download dir, jobs, env reads, email settings)
 - `email_notifier.py:6-25` (SMTP_SSL)
-- `export_slate_averages_vw.py:29-46` (DKEntries.csv path + header detect)
+- `dk_matching.py:10-95` (DKEntries.csv path + header detect + fuzzy match)
 - `daily_fantasy_log_upload.py:355-395` (email + todo_mappings.txt)
 - `.gitignore:4-6` (credentials/.env ignored)
 - `.github/workflows/test.yml`

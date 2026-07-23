@@ -10,15 +10,15 @@ Production-code concerns first; test-only and intent-divergence items are separa
 
 ## Data-Integrity Concerns
 
-4. **No DB-level uniqueness on log tables.** `player_logs`/`fantasy_logs` are created implicitly by `to_sql(if_exists="append")` with no PRIMARY KEY or UNIQUE constraint. De-duplication is **purely in-memory** via the `log_key` set; nothing at the DB layer prevents duplicate `(PLAYER_ID, DATE)` rows. `check_ingest_duplicates.py` exists solely as the after-the-fact safety net. *Evidence:* `daily_player_upload.py:232-244`, `check_ingest_duplicates.py:14-18`.
-5. **The dedup-bug class is documented but the root design is fragile.** Issue #6 / plan 003 (DONE) fixed the specific multi-file re-insertion bug, but the architecture still relies on rebuilding an in-memory set correctly rather than a DB constraint, so regressions remain possible. Plan 004 (`TODO`, "Preserve regular-season unmatched-players worklist") and the dedup design are open items. *Evidence:* `check_ingest_duplicates.py:7-18`, `plans/README.md:16-17`.
-6. **`map_teams` is read but never created by any Python script.** `create_summary_tables.py` requires it and aborts cleanly if missing, but a fresh DB will silently lack it until someone runs `create_team_map_table.sql` manually (which is git-ignored via `*.sql`). Plan 008 (`TODO`) addresses seeding it. *Evidence:* `create_summary_tables.py:40-59`, `create_team_map_table.sql`, `.gitignore:30`.
+4. ~~**No DB-level uniqueness on log tables.**~~ **Largely resolved by plan 012 (DONE).** All three log tables now carry a UNIQUE index `idx_<table>_player_date` on `("PLAYER_ID", "DATE")`, created by `ensure_unique_index()` on every ingest and backfillable on an offseason DB via `create_log_indexes.py`. A dedup miss now raises `IntegrityError` rather than silently duplicating. The in-memory `log_key` set is still the first-line filter, and `check_ingest_duplicates.py` remains the cleanup tool for any pre-index duplicates. *Evidence:* `daily_player_upload.py:34-71,254`, `absence_ingestion.py:54-65`, `create_log_indexes.py`.
+5. **The in-memory dedup remains the primary filter.** Issue #6 / plan 003 (DONE) fixed the multi-file re-insertion bug, and plan 004 (DONE) preserved the regular-season unmatched-players worklist. Plan 012's UNIQUE index (see #4) now backstops the in-memory `log_key` set, so a regression fails loudly instead of silently — the design is materially less fragile than before, though the in-memory set is still what avoids the exception on the happy path. *Evidence:* `check_ingest_duplicates.py:7-18`, `plans/README.md`.
+6. ~~**`map_teams` is read but never created by any Python script.**~~ **Resolved by plan 008 (DONE).** `seed_map_teams.py` creates and populates `map_teams`; run it once on a fresh DB, then re-run after the first real ingestion so `RAW_TEAM_NAME` values derive from actual `fantasy_logs.TEAM` strings (`BIGDATABALL_SEED_FORCE=1` overwrites a populated table). `create_summary_tables.py:40-52` still guards for the table and aborts cleanly if it's missing. *Evidence:* `seed_map_teams.py`, `create_summary_tables.py:40-52`.
 7. **Derived data is fully recomputed each run.** `fantasy_averages` is `if_exists="replace"`, so any duplicate/garbage log rows inflate every average until cleaned and rebuilt. Operationally this couples `check_ingest_duplicates.py --remove` with a mandatory re-run of the summary + slate exports. *Evidence:* `create_summary_tables.py:291-297`, `check_ingest_duplicates.py:264-272`.
 
 ## Maintainability / Tech Debt
 
-8. **Triplicated DraftKings load + fuzzy-match logic.** The DKEntries.csv load, header detection, `PLAYER_NAME_MAP` application, and `thefuzz` match (score ≥ 90) are copy-pasted across `export_slate_averages_vw.py`, `export_playoffs_slate_averages_vw.py`, and `export_slate_averages_csv.py`. A change must be made in three places. Plan 006 (`TODO`) proposes extracting a helper. *Evidence:* `export_slate_averages_vw.py:37-98`, `export_playoffs_slate_averages_vw.py:37-98`, `export_slate_averages_csv.py:39-99`.
-9. **Decentralized, inconsistent path resolution.** Three different idioms coexist: 3-way (with `BIGDATABALL_DATA_DIR`), 2-way (no env override), and `config.py`'s hardcoded no-fallback `G:` path. Editing path logic requires touching many files and remembering which form each uses. Plan 005 (`TODO`) proposes a single `paths` module. *Evidence:* `daily_player_upload.py:21-27`, `create_summary_tables.py:13-17`, `config.py:7`.
+8. ~~**Triplicated DraftKings load + fuzzy-match logic.**~~ **Resolved by plan 006 (DONE).** The DKEntries.csv load, header detection, `PLAYER_NAME_MAP` application, and `thefuzz` match (score ≥ 90) now live once in `dk_matching.py` (`find_dk_file_path`/`load_dk_names`/`match_names`/`to_sql_in_list`); all three export scripts call it. *Evidence:* `dk_matching.py:10-95`, `export_slate_averages_vw.py:27-64`.
+9. ~~**Decentralized, inconsistent path resolution.**~~ **Resolved by plan 005 (DONE).** DB path resolution is centralized in `paths.resolve_base_data_path()` (`BIGDATABALL_DATA_DIR` → `G:` mount → local `Data/`); every DB-touching script imports it. The only remaining hardcoded, no-fallback `G:` path is `config.py`'s `BASE_DOWNLOAD_DIR` for Drive *downloads* (see #13). *Evidence:* `paths.py`, `config.py:7`.
 10. ~~**Hardcoded season filters that differ per view.**~~ **Resolved by plan 007 (DONE).** Season constants now live in `seasons.py`; the three export scripts source them via `{seasons.slate_seasons_sql()}` / `{seasons.L30_SEASON}` / `{seasons.PLAYOFFS_SEASON}`. Annual rollover is a single edit to `seasons.py`.
 11. **Duplicated `os.makedirs(..., exist_ok=True)` lines and dead commented code.** e.g. `daily_player_upload.py:35-36` (line repeated) and the dead summary-pipeline block at `daily_player_upload.py:267-270` after `return`. Cosmetic; noted in `plans/README.md` as not worth a dedicated plan. *Evidence:* `daily_player_upload.py:35-36,267-270`, `daily_fantasy_log_upload.py:43-44`.
 12. **No structured logging.** All observability is `print()` + the end-of-run email; no log levels, no persisted log, no error tracking. Hard to diagnose a failed scheduled run after the fact. *Evidence:* absence of `logging` imports across all modules.
@@ -37,20 +37,20 @@ Production-code concerns first; test-only and intent-divergence items are separa
 
 ## High-Churn Files (watch for hidden complexity)
 
-From `git` history (last 90 days, top of list): `plans/README.md` (6), `player_top_fantasy_performances.sql` (4), `CLAUDE.md` (3), `.gitignore` (3), `daily_fantasy_log_upload.py` (2), `mappings.py` (2). The orchestrator and `mappings.py` are the only frequently-touched *pipeline* files — expect ongoing edits there. *Evidence:* `docs/codebase/.codebase-scan.txt` HIGH-CHURN section.
+From `git` history (last 90 days, top of list): `plans/README.md` (27), `CLAUDE.md` (9), `daily_fantasy_log_upload.py` (8), `daily_player_upload.py` (6), `absence_ingestion.py` (5), `export_slate_averages_vw.py` (4), plus the plan docs and their test files. Among *pipeline* code the orchestrator (`daily_fantasy_log_upload.py`), the two upload paths, and the newer `absence_ingestion.py` see the most churn — expect ongoing edits there. *Evidence:* `git log --since="90 days ago" --name-only`.
 
 ## Test-Only Items (coverage gaps, not production debt)
 
-- No tests for the orchestrator, summary, export, Drive, or email modules (see `TESTING.md`). These are coverage gaps, not runtime bugs. No coverage tooling configured.
+- The suite is now **56 tests across 9 modules** (see `TESTING.md`). Remaining coverage gaps: `create_summary_tables.py` (plan 011, TODO), the view-building bodies of the export scripts, the end-to-end orchestrator, and the Drive/email modules. These are coverage gaps, not runtime bugs. No coverage tooling configured.
 
 ## Evidence
 
-- `plans/README.md:13-22,61-74` (plan statuses + rejected findings)
+- `plans/README.md` (plan status table + rejected findings)
 - `git show --stat 90bc0ab` (plan-only commit)
-- `create_summary_tables.py:40-59,291-297`
+- `create_summary_tables.py:40-52,291-297`
 - `check_ingest_duplicates.py:7-18,264-272`
+- `daily_player_upload.py:34-71,254` / `absence_ingestion.py:54-65` (UNIQUE index)
+- `paths.py`, `dk_matching.py`, `seed_map_teams.py`, `create_log_indexes.py`
 - `config.py:7,34`
 - `auth_manager.py:20-37`
-- `export_slate_averages_vw.py:37-98,128,172`
-- `daily_player_upload.py:35-36,232-244,267-270`
-- `docs/codebase/.codebase-scan.txt` (TODO scan: none; high-churn list)
+- `git log --since="90 days ago" --name-only` (high-churn list)

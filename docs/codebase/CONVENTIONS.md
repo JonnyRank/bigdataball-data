@@ -25,17 +25,15 @@ These are observed from the code, not enforced by any linter (none is configured
 
 ## Path Resolution (the central cross-cutting convention)
 
-Two coexisting idioms — **match the file you are editing**:
+**Centralized in `paths.py` (plan 005, DONE).** Every DB-touching script resolves its base data dir the same way — `BASE_DATA_PATH = paths.resolve_base_data_path()` — which applies one precedence: `BIGDATABALL_DATA_DIR` env override → `G:\My Drive\...` mount → local `Data/` under the repo root. When editing path logic, change `paths.py`, not the call sites. The old per-script 3-way/2-way idioms have been fully collapsed.
 
-- **3-way (newer, test-aware):** `BIGDATABALL_DATA_DIR` env override → `G:\My Drive\...` → local `Data/`. Used by `daily_fantasy_log_upload.py`, `daily_player_upload.py`, `check_ingest_duplicates.py`.
-- **2-way (older):** `G:\My Drive\...` → local `Data/`, no env override. Used by `create_summary_tables.py`, all three `export_*` scripts, `run_db_patch.py`, `verify_db_patch.py`.
-
-`config.py` is the exception: hardcoded `G:` path with no fallback. Plan 005 (TODO) proposes centralizing all of this into a `paths` module.
+`config.py` remains the exception: its `BASE_DOWNLOAD_DIR` (Drive *download* target) is a hardcoded `G:` path with no fallback and does **not** go through `paths.py`.
 
 ## Database Access
 
 - Pipeline/aggregation scripts: SQLAlchemy `create_engine(f"sqlite:///{DB_PATH}")`, `pandas.read_sql`/`to_sql`, and `with engine.begin():` for DDL transactions.
-- Maintenance scripts (`check_ingest_duplicates.py`, `run_db_patch.py`, `verify_db_patch.py`): raw `sqlite3.connect` + cursor.
+- Maintenance scripts (`check_ingest_duplicates.py`, `run_db_patch.py`, `verify_db_patch.py`, `create_log_indexes.py`): raw `sqlite3.connect` + cursor.
+- **UNIQUE-index backstop.** Log tables have no declared PK, but each upload path calls `ensure_unique_index()` (`CREATE UNIQUE INDEX IF NOT EXISTS idx_<table>_player_date ON <table> ("PLAYER_ID", "DATE")`) from `initialize_database()` and after each `to_sql(append)`. It swallows `"no such table"` on the first run (the table doesn't exist until `to_sql` creates it) and is otherwise idempotent. When adding a new log-style table, follow the same pattern.
 - **Tests must dispose the engine** before tmp cleanup so Windows can delete the locked SQLite file (`tests/conftest.py:24-27`).
 
 ## Player Name Standardization
@@ -65,11 +63,12 @@ The export scripts interpolate these via `{seasons.slate_seasons_sql()}` / `{sea
 
 ## Evidence
 
-- `daily_player_upload.py:16-41,87-95,122-161,259-262`
-- `daily_fantasy_log_upload.py:1,29-35,80-347`
-- `create_summary_tables.py:11-17`
-- `export_slate_averages_vw.py:21-26,79-80,102,128,172`
+- `paths.py` (`resolve_base_data_path`, single precedence chain)
+- `daily_player_upload.py:18,34-71,87-104,122-161`
+- `daily_fantasy_log_upload.py:1,25,41-78,80-347`
+- `create_summary_tables.py:10` (path via `paths`)
+- `dk_matching.py:10-95`, `export_slate_averages_vw.py:27-64`
 - `run_db_patch.py:28-49,61-67`
 - `tests/conftest.py:18-27`
 - `pytest.ini:2`
-- `mappings.py:1-17`
+- `mappings.py:1-17`, `seasons.py`
