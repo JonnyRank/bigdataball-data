@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 3844392..HEAD -- tests/test_daily_fantasy_log_upload.py tests/helpers.py tests/conftest.py daily_fantasy_log_upload.py`
+> **Drift check (run first)**: `git diff --stat f142763..HEAD -- tests/test_daily_fantasy_log_upload.py tests/helpers.py tests/conftest.py daily_fantasy_log_upload.py`
 > Compare the "Current state" excerpts against the live code before proceeding;
 > on a mismatch, treat it as a STOP condition.
 
@@ -17,16 +17,22 @@
 - **Risk**: LOW
 - **Depends on**: none (fixture and helpers already exist)
 - **Category**: tests
-- **Planned at**: commit `3844392`, 2026-06-21. **Re-verified at reconcile 2026-07-19
-  (`967d88a`)**: the finding holds — `tests/test_daily_fantasy_log_upload.py` still has
-  exactly 1 test and `write_fantasy_xlsx` still has the original `(path, rows)` signature
-  at `tests/helpers.py:15`. Plan 013 shifted line numbers in `daily_fantasy_log_upload.py`
-  by a few lines (verified anchors: `columns_to_drop` now at line 161, date `strftime` at
-  183, `PLAYER_NAME_MAP` standardization at 196–202, log `to_sql` at 250) — the excerpted
-  code itself is unchanged; treat the excerpts as authoritative and the old line numbers
-  as approximate. Plan 013 also added an email-marking wrapper inside the `fantasy_upload`
-  fixture (`tests/conftest.py`, fixture now starts at line 33) — the fixture remains
-  out of scope and needs no change. The full suite is now 47 tests (was 38).
+- **Planned at**: commit `3844392`, 2026-06-21. **Re-verified at reconcile 2026-07-22
+  (`f142763`)**: the finding holds — the four target behaviors (name standardization,
+  column drops, date formatting, single-file player learning) are still untested, and
+  `write_fantasy_xlsx` still has the original `(path, rows)` signature at `tests/helpers.py:15`.
+  **Change since the last reconcile**: plan 012 (merged `#43`) added a **second** test to
+  `tests/test_daily_fantasy_log_upload.py` — `test_unique_index_exists_on_fantasy_logs`
+  (line 29) — so the file now has **2** tests, not 1. Plan 010's four new tests **append**
+  to it (none of their names collide); the executor should treat this file as containing 2
+  pre-existing tests. Plan 012 also shifted `daily_fantasy_log_upload.py` anchors (it added a
+  DATE-normalization block and an orchestrator guard): verified anchors are now
+  `columns_to_drop` line **193**, `cleaned_data` date `strftime` line **215**,
+  `columns_to_drop` drop line **223**, `PLAYER_NAME_MAP` standardization lines **228–234**,
+  log `to_sql` line **282** — the excerpted code itself is unchanged; treat the excerpts as
+  authoritative and line numbers as approximate. The `fantasy_upload` fixture
+  (`tests/conftest.py`) remains out of scope and needs no change. The full suite is now
+  **52** tests (was 47).
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/28
 
 ## Why this matters
@@ -42,13 +48,16 @@ test suite and catches regressions introduced by future format changes.
 
 ## Current state
 
-**`tests/test_daily_fantasy_log_upload.py`** (1 test today):
+**`tests/test_daily_fantasy_log_upload.py`** (2 tests today — append the new ones):
 ```python
 # tests/test_daily_fantasy_log_upload.py
 import os
 from tests.helpers import write_fantasy_xlsx, make_fantasy_rows, count_rows
 
 def test_dedup_across_files_in_one_run(fantasy_upload):
+    ...
+
+def test_unique_index_exists_on_fantasy_logs(fantasy_upload):   # added by plan 012
     ...
 ```
 
@@ -99,7 +108,7 @@ def fantasy_upload(tmp_path, monkeypatch):
 
 **`daily_fantasy_log_upload.py`** — behaviors being tested:
 
-Name standardization (lines 192-202):
+Name standardization (lines 228-234):
 ```python
 if "PLAYER" in cleaned_data.columns:
     changed_mask = cleaned_data["PLAYER"].isin(mappings.PLAYER_NAME_MAP)
@@ -107,7 +116,7 @@ if "PLAYER" in cleaned_data.columns:
     cleaned_data["PLAYER"] = cleaned_data["PLAYER"].replace(mappings.PLAYER_NAME_MAP)
 ```
 
-Column drops (lines 160-167):
+Column drops (list at line 193, applied at line 223):
 ```python
 columns_to_drop = [
     "FANDUEL", "YAHOO", "FOR_FANDUEL_FULL_ROSTER_CONTESTS",
@@ -115,12 +124,12 @@ columns_to_drop = [
 ]
 ```
 
-Date formatting (lines 181-183):
+Date formatting (lines 215-217):
 ```python
 cleaned_data["DATE"] = pd.to_datetime(cleaned_data["DATE"]).dt.strftime("%Y-%m-%d")
 ```
 
-Rename map (lines 168-179) — key renames:
+Rename map (dict at lines 201-219, applied at line 220) — key renames:
 ```python
 rename_map = {
     "BIGDATABALL_DATASET": "SEASON_SEGMENT",
@@ -130,8 +139,8 @@ rename_map = {
 }
 ```
 
-Player learning (lines 220-243): when `truly_new_logs_df` contains a PLAYER_ID not
-already in `dim_players`, that player is inserted.
+Player learning (new-player selection at lines 263-266, insert at lines 274-280): when
+`truly_new_logs_df` contains a PLAYER_ID not already in `dim_players`, that player is inserted.
 
 **Known name mapping (from `mappings.py`)**: `"GG Jackson"` → `"Gregory Jackson"`.
 Use this in the standardization test (same convention as `test_player_name_standardization_applied`
@@ -285,7 +294,7 @@ def test_date_stored_as_iso_format(fantasy_upload):
 
 ### Step 6: Full suite
 
-**Verify**: `python3 -m pytest -q` → all tests pass (existing + 4 new = net +4 tests in this file).
+**Verify**: `python3 -m pytest -q` → all tests pass (2 existing + 4 new = 6 tests in this file).
 
 ## Test plan
 
@@ -303,7 +312,7 @@ Model after the structural pattern of `tests/test_daily_player_upload.py` (env-s
 ALL must hold:
 
 - [ ] `python3 -m py_compile tests/test_daily_fantasy_log_upload.py tests/helpers.py` exits 0
-- [ ] `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py` exits 0 with 5 tests (1 original + 4 new)
+- [ ] `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py` exits 0 with 6 tests (2 original + 4 new)
 - [ ] `python3 -m pytest -q` exits 0 — full suite still passes
 - [ ] `git diff --name-only` shows only `tests/test_daily_fantasy_log_upload.py` and `tests/helpers.py`
 - [ ] `plans/README.md` status row for 010 updated

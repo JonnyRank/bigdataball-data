@@ -5,7 +5,7 @@
 > conditions" section occurs, stop and report — do not improvise. When done, update the
 > status row for this plan in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat dacd007..HEAD -- daily_fantasy_log_upload.py tests/helpers.py`
+> **Drift check (run first)**: `git diff --stat f142763..HEAD -- daily_fantasy_log_upload.py tests/helpers.py`
 > Compare the "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
 
@@ -15,11 +15,28 @@
 - **Effort**: M
 - **Risk**: MED (a mis-sequenced migration can re-insert every historical fantasy log — see
   the dedup-stability trap in Step 3)
-- **Depends on**: none. **Order-independent from plan 012** — 012 indexes on `(PLAYER_ID,
-  DATE)` and DATE (TEXT) is the discriminator, so a float `PLAYER_ID` does not affect that
-  index. Either plan may land first.
+- **Depends on**: none. **Plan 012 has now landed (DONE, merged `#43`)** — it indexes
+  `fantasy_logs` on `(PLAYER_ID, DATE)` where DATE (TEXT) is the discriminator, so a float
+  `PLAYER_ID` does not affect that index, and 012 did not need 014. The one live interaction:
+  012's `if_exists="replace"` rebuild concern in Step 3 is no longer hypothetical — the unique
+  index **exists** and Step 3 must re-create it (details updated in Step 3).
 - **Category**: data-integrity / type-hygiene
 - **Planned at**: commit `dacd007`, 2026-07-21 (from the plan 012 review).
+- **Refresh (2026-07-22, reconcile @ `f142763`)**: plan 012 (merged `#43`) shifted every
+  `daily_fantasy_log_upload.py` line anchor this plan cites and added a live unique index the
+  Step 3 rebuild will drop. The excerpted **code is unchanged in content** — treat the excerpts
+  as authoritative and the inline line numbers as approximate. Corrected anchors:
+  sqlalchemy import **line 9** (unchanged); `iloc[1:]` dummy-row drop **line 179** (was 147);
+  incoming dedup-key build **line 242** (was 207/209–211); DB-snapshot key build **lines
+  133–142** (was 107–111); `truly_new_logs_df.to_sql` **line 282** (was 250–252);
+  `fantasy_logs_count`/`fantasy_logs_overwritten` counters **lines 170–171** (was 138–139);
+  success-email "Fantasy Logs Processed" line **385** (was 349–354); unmatched-DK warning /
+  `(With Warnings)` block **lines 389–411** (was 376–380). `create_summary_tables.py` is
+  unchanged, so its cited refs (`:257-259`, `:263`) still hold. **New interaction:** plan 012
+  added an `ensure_unique_index()` helper (`daily_fantasy_log_upload.py:41-62`) and a
+  standalone `create_log_indexes.py`; Step 3's `if_exists="replace"` rebuild DROPS the
+  `idx_fantasy_logs_player_date` UNIQUE index, so the migration script MUST re-create it (now
+  spelled out in Step 3).
 - **Issue**: —
 
 ## Why this matters
@@ -46,7 +63,8 @@ inconsistency at the source.
 
 ## Current state
 
-**`daily_fantasy_log_upload.py:250-252`** — the log insert, no cast, no `dtype`:
+**`daily_fantasy_log_upload.py:282-284`** — the log insert, no cast, no `dtype` (plan 012
+added an `ensure_unique_index()` call immediately after it — see Step 3):
 
 ```python
 truly_new_logs_df.to_sql(
@@ -54,9 +72,9 @@ truly_new_logs_df.to_sql(
 )
 ```
 
-The dedup key is built just above (`:209-211`) as
+The incoming dedup key is built above (`:242`) as
 `cleaned_data["PLAYER_ID"].astype(str) + "_" + cleaned_data["DATE"]`, and the DB snapshot key
-at `:107-111`. With a float `PLAYER_ID` both sides produce `"12345.0"` — consistent today.
+at `:133-142`. With a float `PLAYER_ID` both sides produce `"12345.0"` — consistent today.
 
 Imports (`:9`): `from sqlalchemy import create_engine, text` — `Integer`/`BigInteger` is NOT
 imported yet.
@@ -112,8 +130,8 @@ from sqlalchemy import create_engine, text, Integer
 ```
 
 In `main()`, after the player-name standardization block and **before** the dedup key is
-built (`:207`), drop rows missing an ID and cast the present ID column(s) to int. The one
-ordering that matters: this must land **after** the `iloc[1:]` dummy-row drop (`:147`) — by
+built (`:242`), drop rows missing an ID and cast the present ID column(s) to int. The one
+ordering that matters: this must land **after** the `iloc[1:]` dummy-row drop (`:179`) — by
 that point the fixture's placeholder `None` row is already gone, and `dropna(subset=id_cols)`
 removes any remaining null-ID rows, so `.astype(int)` cannot hit a `NaN`:
 ```python
@@ -142,7 +160,7 @@ for c in id_cols:
     cleaned_data[c] = cleaned_data[c].astype(int)
 ```
 
-Pass an explicit `dtype` on the log insert (`:250-252`) so the table is created with INTEGER
+Pass an explicit `dtype` on the log insert (`:282-284`) so the table is created with INTEGER
 affinity on a first run and stays correct:
 ```python
 truly_new_logs_df.to_sql(
@@ -160,12 +178,12 @@ is ignored — that is why Step 3 must rebuild the existing table.)
 `print()` alone isn't enough visibility; thread the drop count into the email report the way
 `absence_rows_count` already is:
 - Initialize `fantasy_rows_dropped = 0` once **before** the per-file loop (alongside
-  `fantasy_logs_count = 0` / `fantasy_logs_overwritten = 0` at `daily_fantasy_log_upload.py:138-139`).
+  `fantasy_logs_count = 0` / `fantasy_logs_overwritten = 0` at `daily_fantasy_log_upload.py:170-171`).
   The `fantasy_rows_dropped += dropped` line in the cast block accumulates across files.
-- In the success-email body (built at `:349-354`), add a line mirroring the existing count
-  lines, e.g. `f"Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): {fantasy_rows_dropped}\n"`.
+- In the success-email body (the "Fantasy Logs Processed" line is at `:385`), add a line
+  mirroring the existing count lines, e.g. `f"Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): {fantasy_rows_dropped}\n"`.
   If `fantasy_rows_dropped > 0`, also append a `--- WARNING ---`-style note (mirror the
-  unmatched-DK-players warning block at `:376-380`) so a non-zero drop is unmissable, and set
+  unmatched-DK-players warning block at `:389-411`) so a non-zero drop is unmissable, and set
   the `(With Warnings)` subject suffix that block already uses.
 - A drop is a data-quality signal, **not** a hard failure — do NOT append it to
   `pipeline_errors` (that would mark the whole run "COMPLETED WITH ERRORS"); the count line +
@@ -181,13 +199,25 @@ precedent from plan 013 — read it for the path-resolution / engine idiom). It 
 1. Load the whole `fantasy_logs` table into pandas.
 2. Drop rows with a null `PLAYER_ID` (or `GAME_ID` if present), then cast the present ID
    column(s) to int.
-3. Write it back with `to_sql(LOGS_TABLE_NAME, engine, if_exists="replace", index=False,
-   dtype={...Integer()...})` so the recreated table has INTEGER affinity.
+3. Write it back with `if_exists="replace"` + `dtype={...Integer()...}` so the recreated table
+   has INTEGER affinity, **and re-create plan 012's UNIQUE index in the same transaction** (see
+   the atomicity note below).
 
-Sketch:
+**Back up the DB first** (the same `.bak-*` habit `check_ingest_duplicates.py` uses), since
+`if_exists="replace"` drops the table. The backup is the ultimate safety net.
+
+**Make the rebuild + index recreation atomic (required — plan 012 is DONE).** Plan 012
+(merged `#43`) created `idx_fantasy_logs_player_date`, a UNIQUE index on
+`fantasy_logs("PLAYER_ID", "DATE")`. `to_sql(if_exists="replace")` DROPS the table and its
+index, so the migration MUST re-create it — and it must do so in the **same transaction** as
+the rebuild. Otherwise a `to_sql` that commits on its own engine connection followed by a
+*separate* index-creation transaction can fail in between, leaving the table replaced but the
+UNIQUE dedup backstop silently absent. SQLite has transactional DDL, so passing the open
+`Connection` to `to_sql` enrolls its DROP/CREATE in one `engine.begin()` block that rolls back
+both operations together on any failure. Sketch:
 ```python
 import pandas as pd
-from sqlalchemy import create_engine, Integer
+from sqlalchemy import create_engine, Integer, text
 import os, paths
 
 DB_PATH = os.path.join(paths.resolve_base_data_path(), "nba_fantasy_logs.db")
@@ -208,17 +238,30 @@ for c in id_cols:
             f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
         )
     df[c] = df[c].astype(int)
-df.to_sql(
-    "fantasy_logs", engine, if_exists="replace", index=False,
-    dtype={c: Integer() for c in id_cols},
-)
-print(f"Rewrote fantasy_logs: {len(df)} rows ({dropped} dropped), {id_cols} cast to INTEGER.")
-```
 
-**Back up the DB first** (the same `.bak-*` habit `check_ingest_duplicates.py` uses), since
-`if_exists="replace"` drops the table. If plan 012 has already added a unique index to
-`fantasy_logs`, note that `if_exists="replace"` DROPS it — re-run the plan-012 index creation
-(or `daily_fantasy_log_upload.py` once) afterward; call this out in the run log.
+# Rebuild the table AND re-create plan 012's UNIQUE index in ONE transaction: passing the
+# open `conn` to to_sql means its DROP/CREATE TABLE runs inside this begin() block, so a
+# failure at either step rolls back both and the table is never left replaced-without-index.
+with engine.begin() as conn:
+    df.to_sql(
+        "fantasy_logs", conn, if_exists="replace", index=False,
+        dtype={c: Integer() for c in id_cols},
+    )
+    conn.execute(text(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_fantasy_logs_player_date '
+        'ON fantasy_logs ("PLAYER_ID", "DATE")'
+    ))
+print(
+    f"Rewrote fantasy_logs: {len(df)} rows ({dropped} dropped), {id_cols} cast to INTEGER; "
+    "re-created UNIQUE idx_fantasy_logs_player_date in the same transaction."
+)
+```
+(`create_log_indexes.py` builds the same index and refuses if duplicates exist — running it once
+after the patch is a valid alternative to the inline `CREATE INDEX`, but it opens its own
+connection, so it is **not** atomic with the rebuild; prefer the single-transaction form above.)
+Verify with the Step-3 check below **plus**
+`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_fantasy_logs_player_date'`
+returning one row.
 
 **Deploy Steps 2 and 3 together** (see trap 1).
 
@@ -324,7 +367,9 @@ and raise it rather than editing the shared helper unilaterally.
 - `tests/helpers.py` — shared fixture helpers.
 - `daily_player_upload.py`, `absence_ingestion.py` — already store INTEGER.
 - `create_summary_tables.py` — already casts output PLAYER_ID to int; no change needed.
-- Plan 012's index work — independent.
+- `create_log_indexes.py` and plan 012's other files — do not edit them. (Step 3 does
+  re-create 012's `idx_fantasy_logs_player_date` from *inside* the new
+  `patch_fantasy_id_types.py`, because the table rebuild drops it — that is in scope.)
 
 ## Done criteria
 
@@ -347,8 +392,8 @@ ALL must hold:
 
 ## Maintenance notes
 
-- `if_exists="replace"` in the migration DROPS any index on `fantasy_logs` (including plan
-  012's unique index if that landed first) — recreate it after migrating.
+- `if_exists="replace"` in the migration DROPS any index on `fantasy_logs`, and plan 012's
+  UNIQUE `idx_fantasy_logs_player_date` **is now live** — Step 3 recreates it after migrating.
 - Keep the incoming cast (Step 2) and any future schema change to these columns in lockstep
   with the stored affinity; a divergence re-opens the dedup-key-stability trap.
 - The same latent float-affinity risk exists for any future `to_sql`-created table with
