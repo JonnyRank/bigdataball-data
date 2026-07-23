@@ -38,7 +38,7 @@ python check_ingest_duplicates.py            # report duplicate (PLAYER_ID, DATE
 python check_ingest_duplicates.py --remove   # back up DB, then delete the duplicates
 python seed_map_teams.py             # create + populate map_teams (run once on a fresh DB)
 python create_log_indexes.py         # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
-python backfill_player_absences.py   # one-shot: backfill player_absences from archived player-feed files
+python backfill_player_absences.py Data/Archived_Player_Logs/some-player-feed.xlsx [more.xlsx ...]  # one-shot: backfill player_absences from one or more archived player-feed files (paths required)
 python run_db_patch.py               # one-time retroactive player-name fix
 python verify_db_patch.py            # verify the name patch
 ```
