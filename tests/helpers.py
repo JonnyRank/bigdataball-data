@@ -12,7 +12,7 @@ def write_player_xlsx(path, rows):
     df.to_excel(path, index=False)
 
 
-def write_fantasy_xlsx(path, rows):
+def write_fantasy_xlsx(path, rows, cols=None):
     """Write a fantasy log .xlsx matching daily_fantasy_log_upload's read format.
 
     daily_fantasy_log_upload reads with header=1 (column names on xlsx row 1) then
@@ -22,7 +22,8 @@ def write_fantasy_xlsx(path, rows):
       xlsx row 2: dummy row     (consumed by iloc[1:] and discarded)
       xlsx row 3+: actual data
     """
-    cols = ["PLAYER_ID", "PLAYER", "DATE"]
+    if cols is None:
+        cols = ["PLAYER_ID", "PLAYER", "DATE"]
     dummy = {c: None for c in cols}
     df = pd.DataFrame([dummy] + list(rows), columns=cols)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
