@@ -146,3 +146,19 @@ def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
     write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed2.xlsx"), rows)
     mod.main()
     assert count_rows(mod.engine, "fantasy_logs") == 1
+
+
+def test_fractional_player_id_is_rejected_not_truncated(fantasy_upload):
+    """A fractional PLAYER_ID (data corruption) must not be silently truncated
+    into a different valid-looking player. feed_01 (valid) is ingested; feed_02's
+    fractional id raises ValueError, which main() records in pipeline_errors and
+    does NOT insert — so the corrupt row never lands."""
+    mod = fantasy_upload
+    good = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    bad = make_fantasy_rows([(2.5, "Corrupt Player", "2025-11-02")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_01_good.xlsx"), good)
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_02_bad.xlsx"), bad)
+
+    mod.main()  # feed_01 sorts first and is inserted; feed_02 is rejected.
+
+    assert count_rows(mod.engine, "fantasy_logs") == 1

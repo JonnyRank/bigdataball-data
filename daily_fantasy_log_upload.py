@@ -135,6 +135,17 @@ def main():
         )
         if not existing_logs_df.empty:
             print(f"Found {len(existing_logs_df)} existing logs in the database.")
+            # Normalize the DB-side PLAYER_ID to an int-formatted string BEFORE
+            # building the key, so it matches the incoming int-cast key ("12345")
+            # regardless of the column's current storage affinity. An un-migrated
+            # (still-REAL) fantasy_logs reads back as float64 -> ".astype(str)" would
+            # yield "12345.0", which never matches the incoming "12345" and makes
+            # every historical row look "new". Normalizing here makes dedup correct
+            # whether or not patch_fantasy_id_types.py has run yet, removing the
+            # deploy-ordering hazard between the incoming int cast and the migration.
+            existing_logs_df["PLAYER_ID"] = pd.to_numeric(
+                existing_logs_df["PLAYER_ID"], errors="coerce"
+            ).astype("Int64")
             # Create the log_key from the loaded data
             existing_logs_df["log_key"] = (
                 existing_logs_df["PLAYER_ID"].astype(str)
@@ -253,14 +264,18 @@ def main():
                 fantasy_rows_dropped += dropped  # run-level counter, surfaced in the email (below)
                 cleaned_data = cleaned_data.loc[~missing_mask]
             for c in id_cols:
+                # Coerce to numeric first so a stray non-numeric cell raises a clear
+                # ValueError here rather than a confusing TypeError from `% 1` on an
+                # object-dtype column.
+                numeric = pd.to_numeric(cleaned_data[c], errors="raise")
                 # Reject fractional IDs rather than silently truncating them: astype(int)
                 # would turn a corrupt 12345.7 into 12345 (a different, valid-looking player).
-                frac = cleaned_data[c][cleaned_data[c] % 1 != 0]
+                frac = numeric[numeric % 1 != 0]
                 if not frac.empty:
                     raise ValueError(
                         f"{c} has non-integer values (refusing to truncate): {frac.unique().tolist()}"
                     )
-                cleaned_data[c] = cleaned_data[c].astype(int)
+                cleaned_data[c] = numeric.astype(int)
 
             # --- 4b. De-duplicate Logs ---
             # Create a unique key in both dataframes for comparison

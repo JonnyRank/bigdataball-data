@@ -309,8 +309,15 @@ Expected: every reported type is `integer` (e.g. `['PLAYER_ID', 'GAME_ID'] ('int
 > **Runbook step — developer runs this, not the executor** (needs the live DB). Step 5's
 > `test_rerun_same_file_no_duplicates_after_int_cast` is the executor-side proxy for this gate.
 
-After Steps 2+3 on a copy of the live DB, run one pipeline pass and confirm nothing is
-re-inserted:
+**Run this against a COPY, not the live DB.** Copy `nba_fantasy_logs.db` to a scratch dir and
+point the pipeline at it via the `BIGDATABALL_DATA_DIR` override that `paths.resolve_base_data_path()`
+honors, so a mistake can't corrupt production:
+```bash
+mkdir -p /tmp/bdb-migration-check && cp "<live-data-dir>/nba_fantasy_logs.db" /tmp/bdb-migration-check/
+export BIGDATABALL_DATA_DIR=/tmp/bdb-migration-check
+python3 -c "import paths; print('target DB dir:', paths.resolve_base_data_path())"  # confirm it is the COPY
+```
+After Steps 2+3 on that copy, run one pipeline pass and confirm nothing is re-inserted:
 ```bash
 python3 check_ingest_duplicates.py            # expect exit 0 (no dupes)
 ```

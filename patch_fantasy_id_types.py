@@ -33,6 +33,7 @@ from datetime import datetime
 
 import pandas as pd
 from sqlalchemy import create_engine, text, Integer
+from sqlalchemy.exc import IntegrityError
 
 import paths
 
@@ -121,14 +122,17 @@ def main():
             f"{id_cols} value."
         )
     for c in id_cols:
+        # Coerce to numeric first so a stray non-numeric cell raises a clear
+        # ValueError rather than a confusing TypeError from `% 1` on object dtype.
+        numeric = pd.to_numeric(df[c], errors="raise")
         # Reject fractional IDs rather than silently truncating them.
-        frac = df[c][df[c] % 1 != 0]
+        frac = numeric[numeric % 1 != 0]
         if not frac.empty:
             raise ValueError(
                 f"{c} has non-integer values (refusing to truncate): "
                 f"{frac.unique().tolist()}"
             )
-        df[c] = df[c].astype(int)
+        df[c] = numeric.astype(int)
 
     with engine.begin() as conn:
         df.to_sql(
@@ -138,12 +142,22 @@ def main():
             index=False,
             dtype={c: Integer() for c in id_cols},
         )
-        conn.execute(
-            text(
-                f'CREATE UNIQUE INDEX IF NOT EXISTS {INDEX_NAME} '
-                f'ON {TABLE} ("PLAYER_ID", "DATE")'
+        try:
+            conn.execute(
+                text(
+                    f'CREATE UNIQUE INDEX IF NOT EXISTS {INDEX_NAME} '
+                    f'ON {TABLE} ("PLAYER_ID", "DATE")'
+                )
             )
-        )
+        except IntegrityError as exc:
+            # The whole engine.begin() block rolls back, so the table is left
+            # untouched. Duplicate (PLAYER_ID, DATE) pairs are the usual cause.
+            raise RuntimeError(
+                f"Could not create UNIQUE {INDEX_NAME}: duplicate (PLAYER_ID, DATE) "
+                "rows likely survived the cast. The rebuild has rolled back and the "
+                "table is unchanged. Run check_ingest_duplicates.py --remove, then "
+                "re-run this migration."
+            ) from exc
 
     print(
         f"Rewrote {TABLE}: {len(df)} rows ({dropped} dropped), {id_cols} cast to "
