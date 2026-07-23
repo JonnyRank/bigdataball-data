@@ -93,6 +93,7 @@ def test_unwanted_columns_are_dropped(fantasy_upload):
     inspector = inspect(mod.engine)
     col_names = [col["name"] for col in inspector.get_columns("fantasy_logs")]
     assert "FANDUEL" not in col_names
+    assert "DRAFTKINGS1" not in col_names  # renamed away, not left alongside
     assert "DK_POINTS" in col_names
     # The rename must preserve the value, not just the column name.
     points = pd.read_sql_query("SELECT DK_POINTS FROM fantasy_logs", mod.engine)["DK_POINTS"].tolist()
