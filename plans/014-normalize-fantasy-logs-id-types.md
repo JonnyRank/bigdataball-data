@@ -37,7 +37,23 @@
   standalone `create_log_indexes.py`; Step 3's `if_exists="replace"` rebuild DROPS the
   `idx_fantasy_logs_player_date` UNIQUE index, so the migration script MUST re-create it (now
   spelled out in Step 3).
-- **Issue**: —
+- **Refresh (2026-07-23, `execute` @ `e68ff41`)** — developer-confirmed facts folded in:
+  1. `fantasy_logs.PLAYER_ID` **and** `GAME_ID` are **still FLOAT/REAL** on the live DB
+     (user-verified 2026-07-23) — the migration is needed, both IDs get cast.
+  2. `GAME_ID` **is present** in the live `fantasy_logs` table. Earlier "GAME_ID may be absent
+     from the table" hedging was mistaken; the `if "GAME_ID" in ...` guards in the code and
+     tests below exist **only** to tolerate the shared test fixture
+     (`tests/helpers.py:write_fantasy_xlsx`, whose default columns still omit GAME_ID), NOT
+     because the real table might lack the column. Do not add fresh "GAME_ID might be missing"
+     reasoning.
+  3. **The executor for this run has NO access to the live DB.** Steps 1, the Step-3 migration
+     *run*, and Step 4 are a **developer runbook performed after the PR**, not executor steps.
+     The executor's job is: create `patch_fantasy_id_types.py`, apply the Step-2 code change,
+     add the Step-5 tests, and verify via `py_compile` + the pytest suite (Steps 5–6 build
+     their own SQLite DB, so the int-cast behavior is still validated end to end).
+  Drift: in-scope `daily_fantasy_log_upload.py` is **unchanged**; `tests/helpers.py` gained a
+  benign `cols=None` param (plan 010) that still defaults to no-GAME_ID — out of scope, compatible.
+- **Issue**: [#42](https://github.com/JonnyRank/bigdataball-data/issues/42)
 
 ## Why this matters
 
@@ -80,11 +96,13 @@ Imports (`:9`): `from sqlalchemy import create_engine, text` — `Integer`/`BigI
 imported yet.
 
 **Test-fixture note (verified):** `tests/helpers.py:write_fantasy_xlsx` writes a dummy
-all-`None` row (consumed by the script's `iloc[1:]`) and defines only
-`cols = ["PLAYER_ID", "PLAYER", "DATE"]` — **no `GAME_ID`**. The `None` upcasts `PLAYER_ID`
-to `float64` before `iloc` drops the row, so the fixture already reproduces the FLOAT bug for
-`PLAYER_ID`. `GAME_ID` is absent from the fixture, so any cast on it must be guarded by an
-`if "GAME_ID" in ...` presence check, or the existing fantasy tests break.
+all-`None` row (consumed by the script's `iloc[1:]`) and **defaults its columns** to
+`["PLAYER_ID", "PLAYER", "DATE"]` (a `cols=None` param added by plan 010) — **no `GAME_ID`**.
+The `None` upcasts `PLAYER_ID` to `float64` before `iloc` drops the row, so the fixture already
+reproduces the FLOAT bug for `PLAYER_ID`. `GAME_ID` is absent **from this fixture** (not from
+the live table — see refresh note 2), so any cast on it must be guarded by an
+`if "GAME_ID" in ...` presence check, or the existing fantasy tests break. The guard is a
+fixture-tolerance measure, not doubt about production data.
 
 ## The two traps this plan must handle
 
@@ -103,8 +121,11 @@ to `float64` before `iloc` drops the row, so the fixture already reproduces the 
 
 ### Step 1: Confirm the live storage types (pre-change diagnostic)
 
-On the developer's machine (schema-safe — only queries `GAME_ID` if the column exists,
-since the plan allows it to be absent):
+> **Runbook step — developer runs this, not the executor** (no live DB in the execute worktree).
+> Already user-verified 2026-07-23: both `PLAYER_ID` and `GAME_ID` report `real`/`float`.
+
+On the developer's machine (the `x in cols` guard keeps the same snippet reusable against the
+GAME_ID-less test fixture; `GAME_ID` is present on the live table):
 ```bash
 python3 -c "
 import sqlite3, os, paths
@@ -117,10 +138,9 @@ sel = ', '.join('typeof(\"%s\")' % x for x in id_cols)
 print(c.execute('SELECT %s FROM fantasy_logs LIMIT 1' % sel).fetchone())
 "
 ```
-Expected: `typeof(...)` reports `real`/`float` for one or both ID columns. Record what you
-see, and note whether `GAME_ID` is present at all. If both are already `integer`, the live DB
-needs no migration (Step 3's data pass is a no-op) — but still apply Steps 2/4 so new inserts
-stay INTEGER.
+Expected (user-verified 2026-07-23): both `PLAYER_ID` and `GAME_ID` report `real`/`float`, so
+the migration is required. (If a future DB already shows `integer` for both, Step 3's data pass
+is a no-op — but still apply Step 2 so new inserts stay INTEGER.)
 
 ### Step 2: Cast incoming IDs in `daily_fantasy_log_upload.py`
 
@@ -192,6 +212,10 @@ is ignored — that is why Step 3 must rebuild the existing table.)
 **Verify**: `python3 -m py_compile daily_fantasy_log_upload.py` → exit 0.
 
 ### Step 3: One-time migration of the existing `fantasy_logs` table
+
+> **Split for this run:** the executor **writes** `patch_fantasy_id_types.py` (in scope) and
+> confirms it `py_compile`s. **Running** it against the live DB, and the live-DB verification
+> below, are the **developer runbook** performed after the PR (no live DB in the worktree).
 
 Create `patch_fantasy_id_types.py` (mirroring the existing `patch_absence_column_names.py`
 precedent from plan 013 — read it for the path-resolution / engine idiom). It must:
@@ -282,8 +306,18 @@ Expected: every reported type is `integer` (e.g. `['PLAYER_ID', 'GAME_ID'] ('int
 
 ### Step 4: Dedup-stability gate
 
-After Steps 2+3 on a copy of the live DB, run one pipeline pass and confirm nothing is
-re-inserted:
+> **Runbook step — developer runs this, not the executor** (needs the live DB). Step 5's
+> `test_rerun_same_file_no_duplicates_after_int_cast` is the executor-side proxy for this gate.
+
+**Run this against a COPY, not the live DB.** Copy `nba_fantasy_logs.db` to a scratch dir and
+point the pipeline at it via the `BIGDATABALL_DATA_DIR` override that `paths.resolve_base_data_path()`
+honors, so a mistake can't corrupt production:
+```bash
+mkdir -p /tmp/bdb-migration-check && cp "<live-data-dir>/nba_fantasy_logs.db" /tmp/bdb-migration-check/
+export BIGDATABALL_DATA_DIR=/tmp/bdb-migration-check
+python3 -c "import paths; print('target DB dir:', paths.resolve_base_data_path())"  # confirm it is the COPY
+```
+After Steps 2+3 on that copy, run one pipeline pass and confirm nothing is re-inserted:
 ```bash
 python3 check_ingest_duplicates.py            # expect exit 0 (no dupes)
 ```
@@ -342,13 +376,14 @@ such a row, which the current helper can't express — and `tests/helpers.py` is
 WARNING + the `Fantasy Rows Dropped` email line). If you want unit coverage, STOP and raise
 extending the helper rather than editing it unilaterally.
 
-**Note on GAME_ID:** the current `write_fantasy_xlsx` helper has no GAME_ID column, so a
-*dedicated* GAME_ID fixture is not added here (that would require editing the shared
-`tests/helpers.py`, which risks other tests — out of scope). Instead the conditional
-assertion above makes GAME_ID a required INTEGER gate automatically the moment any
-fixture or real data provides the column, and Step 3's live-DB verification checks it on
-the actual migrated table. If you conclude a dedicated GAME_ID fixture is warranted, STOP
-and raise it rather than editing the shared helper unilaterally.
+**Note on GAME_ID:** GAME_ID **is** present in the live `fantasy_logs` table (user-confirmed)
+and the migration casts it — but the shared `write_fantasy_xlsx` **test** helper has no GAME_ID
+column, so a *dedicated* GAME_ID unit fixture is not added here (that would require editing the
+shared `tests/helpers.py`, which risks other tests — out of scope). Instead the conditional
+assertion above makes GAME_ID a required INTEGER gate automatically the moment any fixture or
+real data provides the column, and the developer's post-PR live-DB verification (Step 3 runbook)
+checks it on the actual migrated table. If you conclude a dedicated GAME_ID fixture is warranted,
+STOP and raise it rather than editing the shared helper unilaterally.
 
 **Verify**: `python3 -m pytest -q tests/test_daily_fantasy_log_upload.py` → all pass.
 

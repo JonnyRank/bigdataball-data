@@ -111,3 +111,85 @@ def test_date_stored_as_iso_format(fantasy_upload):
 
     dates = pd.read_sql_query("SELECT DATE FROM fantasy_logs", mod.engine)["DATE"].tolist()
     assert dates == ["2025-11-01"]
+
+
+def test_player_id_stored_as_integer(fantasy_upload):
+    """fantasy_logs.PLAYER_ID must be stored as INTEGER, matching player_logs /
+    player_absences — not REAL (the pre-014 float-affinity bug)."""
+    mod = fantasy_upload
+    rows = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+
+    types = pd.read_sql_query(
+        "SELECT typeof(PLAYER_ID) AS t FROM fantasy_logs", mod.engine
+    )["t"].unique().tolist()
+    assert types == ["integer"], f"PLAYER_ID stored as {types}, expected ['integer']"
+
+    # If GAME_ID is present (real feed has it; the current test fixture does not),
+    # it must also be INTEGER. Conditional so the assertion no-ops when absent.
+    cols = pd.read_sql_query("SELECT * FROM fantasy_logs LIMIT 0", mod.engine).columns
+    if "GAME_ID" in cols:
+        gtypes = pd.read_sql_query(
+            "SELECT typeof(GAME_ID) AS t FROM fantasy_logs", mod.engine
+        )["t"].unique().tolist()
+        assert gtypes == ["integer"], f"GAME_ID stored as {gtypes}, expected ['integer']"
+
+
+def test_rerun_same_file_no_duplicates_after_int_cast(fantasy_upload):
+    """The int cast must not break dedup: re-ingesting the same file inserts no
+    duplicate rows."""
+    mod = fantasy_upload
+    rows = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed2.xlsx"), rows)
+    mod.main()
+    assert count_rows(mod.engine, "fantasy_logs") == 1
+
+
+def test_fractional_player_id_is_rejected_not_truncated(fantasy_upload):
+    """A fractional PLAYER_ID (data corruption) must not be silently truncated
+    into a different valid-looking player. feed_01 (valid) is ingested; feed_02's
+    fractional id raises ValueError, which main() records in pipeline_errors and
+    does NOT insert — so the corrupt row never lands."""
+    mod = fantasy_upload
+    good = make_fantasy_rows([(1, "Alpha Player", "2025-11-01")])
+    bad = make_fantasy_rows([(2.5, "Corrupt Player", "2025-11-02")])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_01_good.xlsx"), good)
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed_02_bad.xlsx"), bad)
+
+    mod.main()  # feed_01 sorts first and is inserted; feed_02 is rejected.
+
+    assert count_rows(mod.engine, "fantasy_logs") == 1
+
+
+def test_missing_player_id_row_dropped_counted_and_surfaced(fantasy_upload):
+    """A data row missing PLAYER_ID is not a valid player-game log: it is
+    dropped (not inserted), counted in fantasy_rows_dropped, and surfaced in the
+    success email as a '(With Warnings)' note -- WITHOUT failing the run."""
+    mod = fantasy_upload
+
+    captured = {}
+
+    def capture(subject, body):
+        captured["subject"] = subject
+        captured["body"] = body
+
+    # Override the module-scoped email suppression so we can inspect the report.
+    mod.email_notifier.send_email_alert = capture
+
+    rows = make_fantasy_rows([
+        (None, "Ghost Player", "2025-11-01"),  # missing PLAYER_ID -> dropped
+        (1, "Alpha Player", "2025-11-02"),      # valid -> inserted
+    ])
+    write_fantasy_xlsx(os.path.join(mod.NEW_FILES_FOLDER, "feed1.xlsx"), rows)
+    mod.main()
+
+    # Only the valid row landed; the null-ID row was dropped, not inserted.
+    assert count_rows(mod.engine, "fantasy_logs") == 1
+    # The drop was counted, surfaced in the body, and flagged in the subject --
+    # but it is NOT a hard failure (success email, not the error path).
+    assert "Fantasy Rows Dropped (missing PLAYER_ID/GAME_ID): 1" in captured["body"]
+    assert "(With Warnings)" in captured["subject"]
+    assert "SUCCESS" in captured["subject"]
