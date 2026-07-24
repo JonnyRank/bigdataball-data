@@ -85,6 +85,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 018  | Add a Ruff lint/format gate to CI | P3 | S | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#58](https://github.com/JonnyRank/bigdataball-data/issues/58) |
 | 019  | Add tests for the export view-builder scripts | P2 | M | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#59](https://github.com/JonnyRank/bigdataball-data/issues/59) |
 | 020  | Split the pipeline orchestrator out of `daily_fantasy_log_upload.py` | P2 | M | none | TODO (user-requested `plan` 2026-07-24 @ `8c8bfc4`) | — |
+| 021  | pre-commit Ruff hook + cloud session auto-enroll | P3 | S–M | **018** | TODO (user-requested `plan` 2026-07-24 @ `91fa6a0`) | — |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -136,6 +137,12 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   **015 → 016** (the two robustness bug fixes) → **017 → 018** (cheap DX wins) → **019**
   (the coverage expansion). 019 is tests-only and touches no `src/` code; 017 touches no
   code at all.
+- **021 (pre-commit Ruff) hard-depends on 018 (CI Ruff gate).** 021 reuses the
+  `[tool.ruff]` config and the pinned `ruff==` version that 018 adds to
+  `pyproject.toml`/`requirements-dev.txt`; without 018 the pre-commit hooks would run
+  Ruff's 413-rule default set instead of the intended `E,F,W,I`. 021's Step 0 is a hard
+  STOP if 018 isn't detectable. Sequence: **018 → 021**. They compose — 018 is the
+  non-bypassable CI backstop; 021 is local fix-before-commit sharing the same one config.
 
 ## Findings considered and rejected (so they aren't re-audited)
 
