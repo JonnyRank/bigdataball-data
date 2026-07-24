@@ -39,7 +39,7 @@ machine-checked on every push and PR — a standard, low-risk DX hardening.
 
 - `requirements-dev.txt` (entire file):
 
-```
+```text
 pytest>=7.4
 ```
 
@@ -117,12 +117,18 @@ where = ["src"]
 
 ### Step 1: Discover the actual lint/format state (decides the rest of the plan)
 
-Install Ruff and run both checks against the current tree, capturing exit codes:
+Install Ruff and run both checks against the current tree, capturing exit codes.
+**Discover with the exact ruleset the CI gate will use** (`E,F,W,I` — the same
+`select` you configure in Step 2), not Ruff's defaults: Ruff's default set is
+`E,F` only, so a bare `ruff check .` here could report clean while the configured
+gate later fails on a `W` or `I` (import-order) violation — which would skip
+Step 3 and make CI red immediately after the plan lands. Passing `--select`
+explicitly makes Step 1's discovery match the gate:
 
-```
+```console
 pip install ruff
 ruff format --check . ; echo "format_exit=$?"
-ruff check . ; echo "lint_exit=$?"
+ruff check --select E,F,W,I . ; echo "lint_exit=$?"
 ```
 
 Record both exit codes and the violation output. This branches the plan:
@@ -147,7 +153,7 @@ this.
    reproducible; use the version you installed in Step 1 (find it with
    `ruff --version`), e.g.:
 
-```
+```text
 pytest>=7.4
 ruff==<the version from `ruff --version`>
 ```
@@ -231,8 +237,9 @@ the ruleset rather than the executor bulk-suppressing.
 
 ### Step 5: Update the plans index
 
-Add a DONE status row for plan 018 in `plans/README.md`'s "Execution order &
-status" table, noting whether any pre-existing violations had to be fixed or
+`plans/README.md`'s "Execution order & status" table already has a `TODO` row
+for plan 018 — **update that existing row in place** to DONE (do NOT add a second
+018 row), noting whether any pre-existing violations had to be fixed or
 suppressed (so the reviewer knows what to look at).
 
 ## Test plan

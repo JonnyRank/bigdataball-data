@@ -1,8 +1,9 @@
 # Implementation Plans
 
 **Deep audit 2026-07-24 against commit `aef8efa`** (plan 009 src-layout merge, `HEAD`).
-With all of 001–014 DONE, a fresh `deep` pass read all 24 `src/bigdataball/` modules
-directly (≈3,300 lines) and vetted every finding against the live code. Five new plans
+With all of 001–014 DONE, a fresh `deep` pass read all 24 `.py` files under
+`src/bigdataball/` directly — the 23 modules plan 009 moved into the package plus
+`__init__.py` (≈3,300 lines) — and vetted every finding against the live code. Five new plans
 added — **015** (SMTP send has no network timeout → an unattended run can hang forever
 on a stalled Gmail endpoint), **016** (interrupted Drive downloads land at the final path
 and are ingested as complete on the next run), **017** (no committed `.env.example`),

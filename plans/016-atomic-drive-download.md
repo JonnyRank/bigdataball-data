@@ -151,8 +151,14 @@ are. Target shape:
     except Exception:
         # Clean up the partial download so it can't be mistaken for a complete
         # file, then re-raise so the caller/orchestrator records the failure.
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        # Suppress any error from the cleanup itself so it can't mask the real
+        # download exception we want to propagate (e.g. a Windows lock on the
+        # .part file would otherwise replace the original error).
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
         raise
 
     print(f"  [Success] Saved to {file_path}")
@@ -197,10 +203,13 @@ class _FakeDownloader:
         self._i = 0
 
     def next_chunk(self):
-        if self._fail_after is not None and self._i >= self._fail_after:
-            raise RuntimeError("simulated connection drop")
+        # Write one chunk of real bytes, THEN honor fail_after, so an
+        # interruption leaves a genuinely partial .part file on disk (not an
+        # empty one) — that's what the cleanup path must handle.
         self._fh.write(self._payload)
         self._i += 1
+        if self._fail_after is not None and self._i > self._fail_after:
+            raise RuntimeError("simulated connection drop")
         return (None, True)  # (status, done)
 
 
@@ -269,8 +278,9 @@ count differs, re-check Step 2 before proceeding.
 
 ### Step 4: Update the plans index
 
-In `plans/README.md`, add a DONE status row for plan 016 in the "Execution order
-& status" table, matching the existing rows' formatting.
+In `plans/README.md`, the "Execution order & status" table already has a `TODO`
+row for plan 016. **Update that existing row in place** to DONE (do NOT add a
+second 016 row), matching the neighboring rows' formatting.
 
 ## Test plan
 

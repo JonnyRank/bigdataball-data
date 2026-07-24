@@ -82,7 +82,7 @@ def run_slate_averages_pipeline():
   `"Name + ID"`, then requires a `"Name"` column (`dk_matching.py:16-46`). A
   minimal valid DKEntries.csv the test can write:
 
-```
+```csv
 Position,Name + ID,Name,ID
 PG,Alpha Player (1),Alpha Player,1
 SG,Beta Player (2),Beta Player,2
@@ -225,9 +225,14 @@ def export_env(tmp_path, monkeypatch):
     return db_path, tmp_path, monkeypatch
 ```
 
-**Verify**: `python -m pytest -q tests/test_export_slate_views.py` → collects 0
-tests but does not error on import (`no tests ran`). If it errors, fix the
-scaffolding before adding tests.
+**Verify** the scaffolding imports cleanly (do NOT use `pytest` for this — with
+no test functions yet, pytest exits with status **5** "no tests collected",
+which looks like a failure):
+`python -c "import ast; ast.parse(open('tests/test_export_slate_views.py').read()); print('parse OK')"` → prints `parse OK`.
+Then confirm the imports resolve:
+`python -c "import tests.test_export_slate_views; print('import OK')"` (run from
+the repo root with the package installed) → prints `import OK`. If either errors,
+fix the scaffolding before adding tests.
 
 ### Step 2: Test the regular-season view builder (`export_slate_averages_vw`)
 
@@ -244,8 +249,13 @@ def _import_fresh(mod_name):
 
 def test_slate_view_created_with_matched_player(export_env):
     db_path, tmp_path, monkeypatch = export_env
+    # Seed at L30_SEASON: it is in SLATE_SEASONS (== SLATE_SEASONS[-1] by the
+    # seasons.py invariant), so the row appears in BOTH vw_daily_slate (filters
+    # SEASON in SLATE_SEASONS) and vw_daily_slate_l30 (filters SEASON = L30_SEASON).
+    # Seeding at L30_SEASON explicitly lets us assert L30 *contents* without
+    # depending on that invariant holding.
     _seed_averages_views(db_path, [_avg_row(PLAYER="Alpha Player",
-                                            SEASON=seasons.SLATE_SEASONS[-1])])
+                                            SEASON=seasons.L30_SEASON)])
     dk_csv = tmp_path / "DKEntries.csv"
     _write_dk_csv(dk_csv, ["Alpha Player"])
 
@@ -263,6 +273,12 @@ def test_slate_view_created_with_matched_player(export_env):
         assert "vw_daily_slate_l30" in views
         slate = pd.read_sql_query("SELECT * FROM vw_daily_slate", engine)
         assert "Alpha Player" in slate["PLAYER"].tolist()
+        # Assert L30 *contents*, not just that the view exists — a broken
+        # L30_SEASON filter or a dropped L30FPPM column would still create an
+        # (empty/erroring) view but fail this.
+        l30 = pd.read_sql_query("SELECT * FROM vw_daily_slate_l30", engine)
+        assert "Alpha Player" in l30["PLAYER"].tolist()
+        assert "L30FPPM" in l30.columns
     finally:
         engine.dispose()
 
@@ -343,8 +359,10 @@ Assert the main and L30 CSVs are written and contain the matched player.
 ```python
 def test_csv_export_writes_files(export_env):
     db_path, tmp_path, monkeypatch = export_env
+    # Seed at L30_SEASON (in SLATE_SEASONS by the seasons.py invariant) so the
+    # row lands in both the main and L30 CSVs and we can assert L30 contents.
     _seed_averages_views(db_path, [_avg_row(PLAYER="Alpha Player",
-                                            SEASON=seasons.SLATE_SEASONS[-1])])
+                                            SEASON=seasons.L30_SEASON)])
     dk_csv = tmp_path / "DKEntries.csv"
     _write_dk_csv(dk_csv, ["Alpha Player"])
 
@@ -361,6 +379,9 @@ def test_csv_export_writes_files(export_env):
 
     main_df = pd.read_csv(os.path.join(export_dir, main_files[0]))
     assert "Alpha Player" in main_df["PLAYER"].tolist()
+    # Assert L30 CSV contents too, not just that the file exists.
+    l30_df = pd.read_csv(os.path.join(export_dir, l30_files[0]))
+    assert "Alpha Player" in l30_df["PLAYER"].tolist()
 ```
 
 **Verify**: `python -m pytest -q tests/test_export_slate_views.py -k csv` → `1 passed`.
@@ -375,8 +396,9 @@ If the total isn't 73, reconcile the count before updating the index.
 
 ### Step 6: Update the plans index
 
-Add a DONE status row for plan 019 in `plans/README.md` with the new file name
-and test count, matching the existing rows' formatting. Update
+`plans/README.md` already has a `TODO` row for plan 019 — **update that existing
+row in place** to DONE (do NOT add a second 019 row) with the new file name and
+test count, matching the neighboring rows' formatting. Update
 `docs/codebase/TESTING.md`'s "Gaps" section only if the reviewer asks — that doc
 edit is out of scope for this tests-only plan unless requested.
 

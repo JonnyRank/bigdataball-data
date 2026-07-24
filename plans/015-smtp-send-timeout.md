@@ -134,9 +134,16 @@ SMTP_TIMEOUT_SECONDS = 30
 ```
 
 `smtplib.SMTP_SSL` accepts `timeout` as a keyword argument on all supported
-Python versions (3.11–3.13). The timeout applies to the initial connect **and**
-to each subsequent socket operation (`login`, `send_message`), so it bounds the
-entire send, not just the TCP handshake.
+Python versions (3.11–3.13). The value is applied to the socket, so it bounds
+**each individual blocking operation** — the initial connect, `login`, and
+`send_message` — not just the TCP handshake. Note it is a per-operation timeout,
+not an end-to-end deadline: a pathological multi-step exchange could still take
+up to `timeout` per step. That is fine for our purpose — the failure mode we're
+eliminating is an *infinite* hang (a socket that blocks forever), and a
+per-operation timeout guarantees no single step can block indefinitely, so the
+whole send is bounded to a small multiple of `SMTP_TIMEOUT_SECONDS` in the worst
+case. A hard overall wall-clock deadline is unnecessary here and intentionally
+out of scope.
 
 **Verify**: `python -c "import ast,sys; src=open('src/bigdataball/email_notifier.py').read(); assert 'timeout=SMTP_TIMEOUT_SECONDS' in src and 'SMTP_TIMEOUT_SECONDS = 30' in src; ast.parse(src); print('OK')"` → prints `OK`
 
@@ -222,9 +229,10 @@ green.
 
 ### Step 4: Update the plans index
 
-In `plans/README.md`, add a status row for plan 015 in the "Execution order &
-status" table and mark it DONE with the date and verified test count. Follow the
-exact formatting of the existing rows.
+In `plans/README.md`, the "Execution order & status" table already has a row for
+plan 015 with status `TODO`. **Update that existing row in place** — change its
+status to DONE with the date and verified test count — do NOT add a second 015
+row. Follow the exact formatting of the neighboring rows.
 
 ## Test plan
 

@@ -24,11 +24,14 @@
 
 ## Why this matters
 
-The pipeline reads six environment variables from a `.env` file
-(`config.py` via `python-dotenv`), but **no `.env.example`/template is
-committed** — `docs/codebase/INTEGRATIONS.md` explicitly says so. A person
-setting the pipeline up on a new machine (or a contributor) can only discover
-the required variable names by reading `config.py` and grepping the codebase.
+The pipeline reads six environment variables from a `.env` file (loaded via
+`python-dotenv`): `config.py` reads **five** (`DRIVE_FOLDER_ID_DFS`,
+`DRIVE_FOLDER_ID_PLAYER`, `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECEIVER`) and
+`paths.py` reads the optional override `BIGDATABALL_DATA_DIR`. But **no
+`.env.example`/template is committed** — `docs/codebase/INTEGRATIONS.md`
+explicitly says so. A person setting the pipeline up on a new machine (or a
+contributor) can only discover the required variable names by reading `config.py`
+/ `paths.py` and grepping the codebase.
 A committed `.env.example` with the variable **names and placeholder values**
 (never real secrets) is the standard, zero-risk fix: it documents the contract
 in one obvious file, and `cp .env.example .env` becomes the first setup step.
@@ -129,8 +132,8 @@ EMAIL_SENDER=you@example.com
 EMAIL_PASSWORD=your-gmail-app-password
 EMAIL_RECEIVER=alerts@example.com
 
-# Optional: override the base data directory (env override wins over the G:
-# mount and the local Data/ fallback). Tests set this to a temp dir.
+# Optional: override the base data directory. This env var takes precedence
+# over the G: Drive mount and the local Data/ fallback. Tests set it to a temp dir.
 # BIGDATABALL_DATA_DIR=/absolute/path/to/data
 ```
 
@@ -139,8 +142,25 @@ folder ID, or address, even if one is visible in the environment.
 
 **Verify**: `test -f .env.example && grep -c "=" .env.example` → prints a number
 `>= 5` (the five required vars are present; `BIGDATABALL_DATA_DIR` is commented).
-Then: `grep -Eic "AIza|ya29|-----BEGIN|@gmail\.com" .env.example` → prints `0`
-(no real-looking secrets or real Gmail addresses leaked in).
+
+Then enforce the **exact placeholder values** — this is the real secret-safety
+gate, not a pattern heuristic (a pattern scan can't know whether a real folder ID
+or non-Gmail address slipped in). Confirm every required var's value equals the
+placeholder from Step 2 verbatim:
+
+```console
+grep -Fxq "DRIVE_FOLDER_ID_DFS=your-dfs-feed-folder-id" .env.example && \
+grep -Fxq "DRIVE_FOLDER_ID_PLAYER=your-player-feed-folder-id" .env.example && \
+grep -Fxq "EMAIL_SENDER=you@example.com" .env.example && \
+grep -Fxq "EMAIL_PASSWORD=your-gmail-app-password" .env.example && \
+grep -Fxq "EMAIL_RECEIVER=alerts@example.com" .env.example && \
+echo "placeholders OK"
+```
+
+→ prints `placeholders OK`. If it does not, a value was altered — restore the
+exact placeholder from Step 2 (never a real value). As a belt-and-suspenders
+scan for anything unexpected: `grep -Eic "AIza|ya29|-----BEGIN" .env.example` →
+`0`.
 
 ### Step 3: Update the INTEGRATIONS doc pointer
 
@@ -161,8 +181,9 @@ Leave the variable table that follows it unchanged.
 **Verify**: `python -m pytest -q` → `68 passed` (no code changed, so the suite
 is unaffected — this confirms you didn't accidentally edit a source file).
 
-Then update `plans/README.md`: add a DONE status row for plan 017 in the
-"Execution order & status" table, matching the existing rows' formatting.
+Then update `plans/README.md`: the "Execution order & status" table already has
+a `TODO` row for plan 017 — **update that existing row in place** to DONE (do NOT
+add a second 017 row), matching the neighboring rows' formatting.
 
 ## Test plan
 
