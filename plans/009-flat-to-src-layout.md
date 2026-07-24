@@ -21,7 +21,9 @@
 - **Depends on**: none. As of the 2026-07-23 reconcile every other plan (003–008, 010–014) is DONE and merged, so **009 is the last remaining plan** — nothing downstream needs rebasing onto it any more (see "Maintenance notes").
 - **Category**: tech-debt
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/32
-- **Planned at**: commit `c2f810f`, 2026-06-22 (refreshed for the merges of plans 006/007/008; prior bases `a852503` 2026-06-21 for plan 005's merge `#24`, `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh (2026-06-22):** plans 006/007/008 merged three new runtime modules — `dk_matching.py` (plan 006, `import mappings`), `seasons.py` (plan 007, no internal imports), and `seed_map_teams.py` (plan 008, a **lazy** `import paths` inside `main()`). Consequences for this plan, all handled below: (1) there are now **18** runtime modules to move, not 15; (2) the three export scripts no longer `import mappings` — they now `import dk_matching` and `import seasons` (Step 2 entries corrected); (3) `seed_map_teams.py` has a **second** `__file__`-based `Data/` fallback (line 166) inside its `except` branch, so Step 3 now deepens **two** files, not one; (4) plans 006/007/008 also added three test files (`test_dk_matching` 8, `test_seasons` 3, `test_seed_map_teams` 9) that `import` their module **at top level** and must be converted to `from bigdataball import <module>` (Step 6) → total test count is now **38**, not 18.
+- **Planned at**: commit `2df899c`, 2026-07-23. Re-verified at HEAD `a99f1f8`: the only commits since `2df899c` touched `plans/` (a reconcile), so no in-scope `.py`, `pytest.ini`, or workflow file changed and every "Current state" excerpt below still matches live code.
+- **Current state (read this; the dated bullets below are history you can skip)**: **23** runtime modules to move, **68** tests, and **2** `__file__`-based `Data/` fallbacks (`paths.py` + `seed_map_teams.py`). Every step, count, and list further down already reflects these numbers. The "Refresh" bullets that follow are provenance only — how the counts grew as plans 005–014 merged while 009 waited — and are not needed to execute.
+- **Refresh (base `c2f810f`, 2026-06-22)** (originally the "Planned at", refreshed for the merges of plans 006/007/008; prior bases `a852503` 2026-06-21 for plan 005's merge `#24`, `198d5b9` 2026-06-20, `8bf4ce0` 2026-06-18; original `a91aac1` 2026-06-17). **Major refresh (2026-06-22):** plans 006/007/008 merged three new runtime modules — `dk_matching.py` (plan 006, `import mappings`), `seasons.py` (plan 007, no internal imports), and `seed_map_teams.py` (plan 008, a **lazy** `import paths` inside `main()`). Consequences for this plan, all handled below: (1) there are now **18** runtime modules to move, not 15; (2) the three export scripts no longer `import mappings` — they now `import dk_matching` and `import seasons` (Step 2 entries corrected); (3) `seed_map_teams.py` has a **second** `__file__`-based `Data/` fallback (line 166) inside its `except` branch, so Step 3 now deepens **two** files, not one; (4) plans 006/007/008 also added three test files (`test_dk_matching` 8, `test_seasons` 3, `test_seed_map_teams` 9) that `import` their module **at top level** and must be converted to `from bigdataball import <module>` (Step 6) → total test count is now **38**, not 18.
 - **Refresh (2026-07-19, reconcile @ `967d88a`)**: plan 013 (merged `#38`) added **three** new
   runtime modules — `absence_ingestion.py` (`import mappings`, line 10),
   `backfill_player_absences.py` (`import absence_ingestion` + `import paths`, lines 18–19), and
@@ -248,6 +250,7 @@ unchanged — only the import line changes, never the call sites.
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
+| Install deps (run first, in a bare env) | `pip install -r requirements.txt -r requirements-dev.txt` | exit 0 |
 | Run tests | `python -m pytest -q` | all tests pass, exit 0 |
 | Editable install | `pip install -e .` | exit 0, `Successfully installed bigdataball-...` |
 | Import smoke test | (see Step 7) | prints `ALL IMPORTS OK`, exit 0 |
@@ -587,9 +590,17 @@ repo:
 python -c "import os, tempfile, importlib; os.environ['BIGDATABALL_DATA_DIR'] = tempfile.mkdtemp(); [importlib.import_module('bigdataball.'+m) for m in ['absence_ingestion','auth_manager','backfill_player_absences','check_ingest_duplicates','config','create_log_indexes','create_summary_tables','daily_fantasy_log_upload','daily_player_upload','dk_matching','drive_ingestion','email_notifier','export_playoffs_slate_averages_vw','export_slate_averages_csv','export_slate_averages_vw','mappings','patch_absence_column_names','patch_fantasy_id_types','paths','run_db_patch','seasons','seed_map_teams','verify_db_patch']]; print('ALL IMPORTS OK')"
 ```
 
-**Verify**: prints `ALL IMPORTS OK`, exit 0. If any module raises
-`ImportError`/`ModuleNotFoundError`, a relative import in Step 2 was missed —
-fix it and re-run.
+**Prerequisite**: the runtime third-party deps must be installed first
+(`pip install -r requirements.txt -r requirements-dev.txt`) — importing
+`bigdataball.drive_ingestion`/`auth_manager` pulls in the Google API libraries at
+module load. In a bare environment those are the modules that fail here.
+
+**Verify**: prints `ALL IMPORTS OK`, exit 0. If a module raises
+`ImportError`/`ModuleNotFoundError` for **an internal name** (`bigdataball.*` or a
+bare `mappings`/`paths`/…), a relative import in Step 2 was missed — fix it and
+re-run. If instead it fails on a **third-party** package name (`googleapiclient`,
+`google`, `dotenv`, …), that's the missing-deps prerequisite above, not a Step 2
+error — install requirements and re-run.
 
 > **Note — `seed_map_teams`'s lazy import is NOT covered by this smoke test.**
 > Importing `seed_map_teams` does not execute the `from . import paths` line,
