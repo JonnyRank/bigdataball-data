@@ -15,15 +15,20 @@ Use the codebase docs for details instead of re-discovering the repo each time:
 
 ## What this is
 
-An NBA DFS data pipeline in Python. It downloads player box-score and DraftKings fantasy-log Excel files from Google Drive, loads them into a local SQLite database (`nba_fantasy_logs.db`), and exports per-player averages to SQL views and CSVs consumed by Excel-based DFS analysis. Every entry point is a standalone script.
+An NBA DFS data pipeline in Python. It downloads player box-score and DraftKings fantasy-log Excel files from Google Drive, loads them into a local SQLite database (`nba_fantasy_logs.db`), and exports per-player averages to SQL views and CSVs consumed by Excel-based DFS analysis. Every entry point is a module in the installable `bigdataball` package, run as `python -m bigdataball.<module>`.
 
 ## Build And Run
 
 ```bash
 pip install -r requirements.txt          # install deps
+pip install -e .                         # install the bigdataball package (required for `python -m bigdataball.*`)
 
 python -m bigdataball.daily_fantasy_log_upload       # MAIN orchestrator — runs the full pipeline
 ```
+
+The `pip install -e .` step is required: with the src layout the modules live under
+`src/bigdataball/`, so `python -m bigdataball.<module>` only resolves once the package
+is installed (editable is fine) or `PYTHONPATH=src` is set.
 
 `daily_fantasy_log_upload.py` is the whole-pipeline orchestrator despite its name. Requires a `.env` file with Drive/email credentials — see `docs/codebase/INTEGRATIONS.md`. Individual stages can be run standalone:
 
@@ -65,7 +70,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q                      # full suite
 ```
 
-CI runs `pytest -q` on every push/PR (56 tests as of 2026-07-23). See `docs/codebase/TESTING.md` for coverage details and gaps. Still-untested scripts (`create_summary_tables.py`, the export view-builders, the end-to-end orchestrator) are best verified by reading console output and inspecting the DB directly.
+CI runs `pytest -q` on every push/PR (68 tests as of 2026-07-24). See `docs/codebase/TESTING.md` for coverage details and gaps. Still-untested scripts (`create_summary_tables.py`, the export view-builders, the end-to-end orchestrator) are best verified by reading console output and inspecting the DB directly.
 
 ## Claude Code on the Web
 

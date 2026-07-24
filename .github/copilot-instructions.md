@@ -95,9 +95,12 @@ Required credential files (git-ignored):
 
 ```bash
 pip install -r requirements.txt
+pip install -e .   # install the bigdataball package so `python -m bigdataball.*` resolves
 ```
 
 > **Note:** The `requirements.txt` file may contain encoding artifacts (null bytes between characters). If `pip install` fails with a parsing error, re-save the file with standard UTF-8 encoding before retrying.
+
+> **Note:** With the `src/bigdataball/` layout, the `python -m bigdataball.<module>` commands below require the package to be importable — run `pip install -e .` (as above) or set `PYTHONPATH=src` first.
 
 ## How to Run
 
@@ -109,7 +112,7 @@ python -m bigdataball.daily_fantasy_log_upload
 Individual scripts can also be run standalone:
 ```bash
 python -m bigdataball.daily_player_upload          # Just player box-score ingestion (+ DNP-DND-NWT absences)
-python -m bigdataball.backfill_player_absences <file...>  # One-shot backfill of player_absences from archived files
+python -m bigdataball.backfill_player_absences file1.xlsx [file2.xlsx ...]  # One-shot backfill of player_absences from archived files
 python -m bigdataball.drive_ingestion              # Just Google Drive download
 python -m bigdataball.create_summary_tables        # Just rebuild averages + views
 python -m bigdataball.export_slate_averages_vw     # Just rebuild slate views
