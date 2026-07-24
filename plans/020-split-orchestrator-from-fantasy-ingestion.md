@@ -59,6 +59,26 @@ after the split. That is why the ingestion `main()` returns a **4th element**
 (a list of per-file error strings) rather than swallowing them — see
 "Preserving the error-email behavior" below.
 
+**Terminal output during a full run is also unchanged.** The maintainer
+sometimes triggers the pipeline manually and reads the verbose per-stage
+`print` output in the terminal. Every `print(...)` in the pipeline must be
+preserved and must still fire when running `python -m bigdataball.daily_pipeline`.
+This is automatic if you move blocks **verbatim**: the orchestration prints
+(stage banners, summary/export progress, email confirmation) move into
+`daily_pipeline.main()`, and the per-file ingestion prints — including the
+`*** ERROR processing ... ***` / `Script will stop ...` lines — stay inside
+`daily_fantasy_log_upload.main()`, which `daily_pipeline` **calls**, so they
+still stream to the same terminal in the same order (Drive → player → fantasy
+per-file → summary → exports → email). The orchestrator's `main()` returning
+`None` affects only Python callers (the value is discarded by the
+`if __name__ == "__main__"` line and never echoed by `python -m`); it does
+**not** suppress any stdout. Do NOT remove, gate, or quiet any `print` while
+moving code. (Running the ingestion module standalone —
+`python -m bigdataball.daily_fantasy_log_upload` — prints only its own
+ingestion/error lines, not the orchestration banners or the email, exactly as
+`daily_player_upload` does standalone today; the full manual run uses
+`daily_pipeline`.)
+
 > **Deployment hazard — read before starting and echo in your PR description.**
 > The maintainer's Windows Task Scheduler job currently runs
 > `python -m bigdataball.daily_fantasy_log_upload` as the *whole pipeline*
