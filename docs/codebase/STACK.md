@@ -10,7 +10,7 @@
 
 - Runtime deps: `requirements.txt` (fully pinned, `==`).
 - Dev/test deps: `requirements-dev.txt` (`pytest>=7.4` only).
-- No `pyproject.toml`, `setup.py`, `setup.cfg`, `Pipfile`, or `poetry.lock` — pip + requirements files only.
+- Package declared via `pyproject.toml` (setuptools src-layout manifest; no runtime deps declared — those stay in `requirements.txt`). No `setup.py`, `setup.cfg`, `Pipfile`, or `poetry.lock`.
 
 ## Runtime Dependencies (`requirements.txt`)
 
@@ -50,5 +50,5 @@ Standard-library modules used directly: `sqlite3` (raw access in `check_ingest_d
 - `config.py:7` (hardcoded Windows `G:` path)
 - `check_ingest_duplicates.py:72-76` (stdlib `sqlite3`/`argparse` imports)
 - `email_notifier.py:1-2` (`smtplib`, `email.message`)
-- Absence of `pyproject.toml`/`setup.py` confirmed by directory scan (`docs/codebase/.codebase-scan.txt`)
+- `pyproject.toml` (setuptools src-layout manifest; no `[tool.ruff]` or runtime deps declared)
 - Python 3.13.3 (local `venv/`), Ruff-via-VS-Code-extension: confirmed by maintainer (2026-06-17)

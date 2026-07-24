@@ -41,7 +41,7 @@ From `git` history (last 90 days, top of list): `plans/README.md` (27), `CLAUDE.
 
 ## Test-Only Items (coverage gaps, not production debt)
 
-- The suite is now **56 tests across 9 modules** (see `TESTING.md`). Remaining coverage gaps: `create_summary_tables.py` (plan 011, TODO), the view-building bodies of the export scripts, the end-to-end orchestrator, and the Drive/email modules. These are coverage gaps, not runtime bugs. No coverage tooling configured.
+- The suite is now **68 tests across 11 modules** (see `TESTING.md`). Remaining coverage gaps: the view-building bodies of the export scripts and the Drive/email modules. (`create_summary_tables.py` and the orchestrator are now covered — plans 010/011 DONE.) These are coverage gaps, not runtime bugs. No coverage tooling configured.
 
 ## Evidence
 

@@ -39,7 +39,7 @@ bigdataball-data/
 │   ├── __init__.py
 │   ├── conftest.py                 # `player_upload` fixture (env-seam fresh import)
 │   ├── helpers.py                  # synthetic .xlsx writers
-│   └── test_*.py                   # 9 test modules, 56 tests (see TESTING.md)
+│   └── test_*.py                   # 11 test modules, 68 tests (see TESTING.md)
 ├── plans/                          # improve-skill handoff plans (001–014 + README index)
 ├── docs/codebase/                  # (this documentation)
 ├── *.sql                           # standalone/manual SQL (git-ignored via *.sql)
@@ -91,5 +91,5 @@ All modules are importable from the `bigdataball` package and runnable via `pyth
 - `config.py:1-36`, `paths.py` (`resolve_base_data_path`)
 - `mappings.py:5-17`
 - `plans/README.md` (plan status table — all 001–014 DONE)
-- `tests/` directory (conftest, helpers, nine `test_*.py` modules — 56 tests)
+- `tests/` directory (conftest, helpers, eleven `test_*.py` modules — 68 tests)
 - `.gitignore:19-31` (`*.db`, `*.sql` ignored)
