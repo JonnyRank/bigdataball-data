@@ -498,18 +498,16 @@ Drive/Google/email because the module pulled those in. Now that
 
        module = importlib.import_module("bigdataball.run_pipeline")
 
-       # Mark any real email as pytest traffic (mirrors the old fixture).
-       real_send = module.email_notifier.send_email_alert
-
-       def send_marked_as_test(subject, body):
-           real_send(
-               f"[PYTEST] {subject}",
-               "This email was sent by the pytest suite (orchestrator fixture), "
-               "NOT by a production pipeline run.\n\n" + body,
-           )
-
+       # Default the email sender to a NO-OP so any orchestrator test that
+       # drives main() without replacing send_email_alert itself cannot perform
+       # real SMTP I/O. run_pipeline.main() always calls send_email_alert at the
+       # end, and config.EMAIL_ENABLED is hardcoded True, so a real send would
+       # hang the sandbox (no network) with no timeout -- the same hazard the
+       # plan-010 test file documents. Individual tests still monkeypatch
+       # send_email_alert to capture the subject/body when they need to assert
+       # on it (see test_run_pipeline.py / test_orchestrator_warnings.py).
        monkeypatch.setattr(
-           module.email_notifier, "send_email_alert", send_marked_as_test
+           module.email_notifier, "send_email_alert", lambda *a, **kw: None
        )
 
        yield module
@@ -778,6 +776,7 @@ Machine-checkable. ALL must hold:
       (CI runs the test suite, not the module by name — confirms no CI ref
       needs changing).
 - [ ] `grep -rn "orchestrator despite\|Main entry point / orchestrator" CLAUDE.md docs/ .github/` returns no matches.
+- [ ] `grep -rn "run_pipeline" CLAUDE.md docs/codebase/STRUCTURE.md .github/copilot-instructions.md` shows the new orchestrator is named as the entry point in each. (Note: do NOT assert the string `daily_fantasy_log_upload` is absent from docs — it intentionally remains as the standalone fantasy-ingestion command in `CLAUDE.md`'s stage list; only the *orchestrator* framing moves to `run_pipeline`.)
 - [ ] `plans/README.md` has a plan 020 row marked DONE.
 - [ ] `git status` shows only the in-scope files changed.
 
