@@ -77,6 +77,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 017  | Commit a `.env.example` template | P3 | S | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#57](https://github.com/JonnyRank/bigdataball-data/issues/57) |
 | 018  | Add a Ruff lint/format gate to CI | P3 | S | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#58](https://github.com/JonnyRank/bigdataball-data/issues/58) |
 | 019  | Add tests for the export view-builder scripts | P2 | M | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#59](https://github.com/JonnyRank/bigdataball-data/issues/59) |
+| 020  | Split the pipeline orchestrator out of `daily_fantasy_log_upload.py` | P2 | M | none | TODO (user-requested `plan` 2026-07-24 @ `8c8bfc4`) | — |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -144,6 +145,9 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   not worth a dedicated plan.
 - **Misleading orchestrator filename** (`daily_fantasy_log_upload.py` is the orchestrator):
   documented in `CLAUDE.md`; renaming would break the documented invocation. Not worth it.
+  **Superseded 2026-07-24 by plan 020** — rather than rename, the orchestration is being
+  extracted into a new `run_pipeline.py`, leaving `daily_fantasy_log_upload.py` as
+  fantasy-log ingestion only (parallel to `daily_player_upload.py`).
 
 ## New findings considered and rejected (plans 010–012 audit)
 
