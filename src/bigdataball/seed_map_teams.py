@@ -152,7 +152,7 @@ def _canonical_rows():
 
 def main():
     try:
-        import paths
+        from . import paths
         base = paths.resolve_base_data_path()
     except Exception:
         # Replicate the three-way path resolution used by other scripts in this repo:
@@ -163,7 +163,10 @@ def main():
         elif os.path.exists(r"G:\My Drive"):
             base = r"G:\My Drive\Documents\bigdataball"
         else:
-            base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data")
+            base = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "Data",
+            )
     db_path = os.path.join(base, "nba_fantasy_logs.db")
 
     conn = sqlite3.connect(db_path)

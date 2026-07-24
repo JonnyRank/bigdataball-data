@@ -35,7 +35,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text, Integer
 from sqlalchemy.exc import IntegrityError
 
-import paths
+from . import paths
 
 TABLE = "fantasy_logs"
 ID_COLS_CANDIDATES = ("PLAYER_ID", "GAME_ID")

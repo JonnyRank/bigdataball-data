@@ -15,12 +15,12 @@ def dedup_tool(tmp_path, monkeypatch):
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
 
     # Fresh import so the module-level path resolution re-runs with the env var.
-    sys.modules.pop("check_ingest_duplicates", None)
-    module = importlib.import_module("check_ingest_duplicates")
+    sys.modules.pop("bigdataball.check_ingest_duplicates", None)
+    module = importlib.import_module("bigdataball.check_ingest_duplicates")
 
     yield module
 
-    sys.modules.pop("check_ingest_duplicates", None)
+    sys.modules.pop("bigdataball.check_ingest_duplicates", None)
 
 
 def _seed(db_path, player_rows, fantasy_rows=()):

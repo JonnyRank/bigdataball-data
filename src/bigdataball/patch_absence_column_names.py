@@ -16,7 +16,7 @@ import sqlite3
 import sys
 from datetime import datetime
 
-import paths
+from . import paths
 
 TABLE = "player_absences"
 RENAMES = [

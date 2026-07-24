@@ -8,15 +8,15 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 import os
-import dk_matching
-import paths
-import seasons
+from . import dk_matching
+from . import paths
+from . import seasons
 
 # from datetime import datetime
 
 
-def run_slate_averages_pipeline():
-    print("--- Starting Slate Averages Pipeline (View Creation) ---")
+def run_playoffs_slate_averages_pipeline():
+    print("--- Starting Playoffs Slate Averages Pipeline (View Creation) ---")
 
     # --- 1. Setup Paths ---
     BASE_DATA_PATH = paths.resolve_base_data_path()
@@ -37,7 +37,7 @@ def run_slate_averages_pipeline():
 
         print("Fetching valid player list from database...")
         db_players_query = (
-            "SELECT DISTINCT PLAYER FROM vw_player_averages_regular_season"
+            "SELECT DISTINCT PLAYER FROM vw_player_averages_playoffs"
         )
         db_players_df = pd.read_sql_query(db_players_query, engine)
         valid_db_names = db_players_df["PLAYER"].tolist()
@@ -63,7 +63,7 @@ def run_slate_averages_pipeline():
         # --- 5. Create the View ---
         sql_names_string = dk_matching.to_sql_in_list(final_names_to_query)
 
-        view_name = "vw_daily_slate"
+        view_name = "vw_daily_slate_playoffs"
 
         drop_view_sql = f"DROP VIEW IF EXISTS {view_name}"
 
@@ -84,9 +84,9 @@ def run_slate_averages_pipeline():
             GSFPPM, 
             STDV_FPPG as STDV
         FROM 
-            vw_player_averages_regular_season
+            vw_player_averages_playoffs
         WHERE 
-            SEASON in ({seasons.slate_seasons_sql()})
+            SEASON = '{seasons.PLAYOFFS_SEASON}'
             AND PLAYER IN ('{sql_names_string}')
         ORDER BY
             TEAM, PLAYER, SEASON desc
@@ -101,49 +101,10 @@ def run_slate_averages_pipeline():
             print(
                 f"SUCCESS: View '{view_name}' has been updated with {len(final_names_to_query)} players."
             )
-            print("You can now query 'vw_daily_slate' directly from Excel.")
+            print("You can now query 'vw_daily_slate_playoffs' directly from Excel.")
 
         except Exception as e:
             print(f"*** Error updating view: {e} ***")
-
-        # --- 6. Create the L30 View ---
-        view_name_l30 = "vw_daily_slate_l30"
-        drop_view_l30_sql = f"DROP VIEW IF EXISTS {view_name_l30}"
-
-        # This new view includes L30FPPM and is filtered to the current L30 season (seasons.L30_SEASON).
-        create_view_l30_sql = f"""
-        CREATE VIEW {view_name_l30} AS
-        SELECT
-            SEASON,
-            PLAYER,
-            TEAM,
-            CAST(GP AS INTEGER) AS GP,
-            CAST(GS AS INTEGER) AS GS,
-            MPG,
-            GSMPG,
-            FPPG,
-            GSFPPG,
-            FPPM,
-            L30FPPM,
-            GSFPPM,
-            STDV_FPPG as STDV
-        FROM
-            vw_player_averages_regular_season
-        WHERE
-            SEASON = '{seasons.L30_SEASON}'
-            AND PLAYER IN ('{sql_names_string}')
-        ORDER BY
-            TEAM, PLAYER
-        """
-        try:
-            with engine.begin() as connection:
-                connection.execute(text(drop_view_l30_sql))
-                connection.execute(text(create_view_l30_sql))
-            print(
-                f"SUCCESS: View '{view_name_l30}' has been updated with {len(final_names_to_query)} players."
-            )
-        except Exception as e:
-            print(f"*** Error updating view '{view_name_l30}': {e} ***")
 
     except Exception as e:
         print(f"*** An error occurred: {e} ***")
@@ -152,4 +113,4 @@ def run_slate_averages_pipeline():
 
 
 if __name__ == "__main__":
-    run_slate_averages_pipeline()
+    run_playoffs_slate_averages_pipeline()

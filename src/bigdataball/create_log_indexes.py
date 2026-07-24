@@ -44,7 +44,7 @@ import argparse
 import os
 import sqlite3
 import sys
-import paths
+from . import paths
 
 # --- Configuration ---
 BASE_DATA_PATH = paths.resolve_base_data_path()

@@ -15,8 +15,8 @@ import sys
 
 from sqlalchemy import create_engine
 
-import absence_ingestion
-import paths
+from . import absence_ingestion
+from . import paths
 
 EPILOG = """\
 Note: BigDataBall player-feed files are cumulative for the whole season, so

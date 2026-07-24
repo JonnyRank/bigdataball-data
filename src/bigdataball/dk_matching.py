@@ -1,6 +1,6 @@
 import os
 
-import mappings
+from . import mappings
 from thefuzz import process
 
 DK_FILENAME = "DKEntries.csv"

@@ -1,4 +1,4 @@
-import dk_matching
+from bigdataball import dk_matching
 
 
 def test_exact_match_is_kept():

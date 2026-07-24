@@ -1,4 +1,4 @@
-import seasons
+from bigdataball import seasons
 
 
 def test_slate_seasons_sql_renders_quoted_csv(monkeypatch):

@@ -3,12 +3,12 @@
 ## Framework & How to Run
 
 - **pytest** (`>=7.4`, `requirements-dev.txt` — separate from runtime deps).
-- Config: `pytest.ini` → `pythonpath = .` (so root modules import under a bare `pytest`), `testpaths = tests`.
-- Verified current state: **`python -m pytest -q` → 56 passed in ~9s** (run 2026-07-23).
+- Config: `pytest.ini` → `pythonpath = src` (so modules import under the `bigdataball` package), `testpaths = tests`.
+- Verified current state: **`python -m pytest -q` → 68 passed** (run 2026-07-24).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                                       # full suite (56 tests)
+python -m pytest -q                                       # full suite (68 tests)
 python -m pytest -q tests/test_check_ingest_duplicates.py # one file
 python -m pytest -q -k dedup                              # by keyword
 ```
@@ -68,4 +68,4 @@ tests/
 - `tests/test_*.py` — nine modules (per-file counts above)
 - `tests/test_check_ingest_duplicates.py` (10 tests, `dedup_tool` fixture)
 - `.github/workflows/test.yml:25-26`
-- Local run: `python -m pytest -q` → `56 passed in 8.52s` (2026-07-23)
+- Local run: `python -m pytest -q` → `68 passed` (2026-07-24)

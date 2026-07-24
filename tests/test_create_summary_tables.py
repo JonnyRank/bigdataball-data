@@ -13,11 +13,11 @@ def summary_tables(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
-    sys.modules.pop("create_summary_tables", None)
-    module = importlib.import_module("create_summary_tables")
+    sys.modules.pop("bigdataball.create_summary_tables", None)
+    module = importlib.import_module("bigdataball.create_summary_tables")
     yield module
     module.engine.dispose()
-    sys.modules.pop("create_summary_tables", None)
+    sys.modules.pop("bigdataball.create_summary_tables", None)
 
 
 def _seed(db_path, fantasy_rows, players, teams):

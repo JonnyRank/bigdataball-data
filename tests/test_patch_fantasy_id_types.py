@@ -51,11 +51,11 @@ def patch_module(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)
     monkeypatch.setenv("BIGDATABALL_DATA_DIR", str(data_dir))
-    sys.modules.pop("patch_fantasy_id_types", None)
-    sys.modules.pop("paths", None)
-    module = importlib.import_module("patch_fantasy_id_types")
+    sys.modules.pop("bigdataball.patch_fantasy_id_types", None)
+    sys.modules.pop("bigdataball.paths", None)
+    module = importlib.import_module("bigdataball.patch_fantasy_id_types")
     yield module
-    sys.modules.pop("patch_fantasy_id_types", None)
+    sys.modules.pop("bigdataball.patch_fantasy_id_types", None)
 
 
 def _typeof(db_path, column):
