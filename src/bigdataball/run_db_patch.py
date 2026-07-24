@@ -1,7 +1,7 @@
 import sqlite3
 import os
-import mappings
-import paths
+from . import mappings
+from . import paths
 
 # --- Configuration: Match logic from main scripts ---
 BASE_DATA_PATH = paths.resolve_base_data_path()

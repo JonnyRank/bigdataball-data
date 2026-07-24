@@ -10,9 +10,9 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import glob
 import os
-import absence_ingestion
-import mappings
-import paths
+from . import absence_ingestion
+from . import mappings
+from . import paths
 
 # --- 1. Configuration ---
 BASE_DATA_PATH = paths.resolve_base_data_path()

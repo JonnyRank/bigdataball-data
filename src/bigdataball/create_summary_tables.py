@@ -4,7 +4,7 @@ from sqlalchemy.types import Integer, Float  # <--- Added this
 from datetime import datetime
 import os
 import numpy as np
-import paths
+from . import paths
 
 # --- 1. Configuration ---
 BASE_DATA_PATH = paths.resolve_base_data_path()

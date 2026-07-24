@@ -8,7 +8,7 @@
 # tests) inject their own `engine` so it can be reused across contexts.
 import pandas as pd
 from sqlalchemy import text
-import mappings
+from . import mappings
 
 ABSENCES_TABLE_NAME = "player_absences"
 PLAYERS_TABLE_NAME = "dim_players"

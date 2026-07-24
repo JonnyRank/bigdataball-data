@@ -12,9 +12,9 @@ import pandas as pd
 from sqlalchemy import create_engine
 import os
 from datetime import datetime
-import dk_matching
-import paths
-import seasons
+from . import dk_matching
+from . import paths
+from . import seasons
 
 
 def run_slate_averages_smart_export():

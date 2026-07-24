@@ -2,8 +2,8 @@ import io
 import os
 import googleapiclient.discovery
 from googleapiclient.http import MediaIoBaseDownload
-from auth_manager import authenticate_google_drive
-import config
+from .auth_manager import authenticate_google_drive
+from . import config
 
 
 def get_drive_service():

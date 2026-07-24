@@ -9,15 +9,15 @@ import pandas as pd
 from sqlalchemy import create_engine, text, Integer
 import glob
 import os
-import create_summary_tables
-import export_slate_averages_vw
-import export_playoffs_slate_averages_vw
-import export_slate_averages_csv
-import daily_player_upload
-import drive_ingestion
-import email_notifier
-import mappings
-import paths
+from . import create_summary_tables
+from . import export_slate_averages_vw
+from . import export_playoffs_slate_averages_vw
+from . import export_slate_averages_csv
+from . import daily_player_upload
+from . import drive_ingestion
+from . import email_notifier
+from . import mappings
+from . import paths
 from datetime import datetime
 
 

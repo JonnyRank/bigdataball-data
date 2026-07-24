@@ -14,5 +14,7 @@ def resolve_base_data_path():
         return override
     if os.path.exists(r"G:\My Drive"):
         return r"G:\My Drive\Documents\bigdataball"
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    # Repo root: this module now lives at <repo>/src/bigdataball/paths.py,
+    # so go up three levels to reach <repo> (keeps the local Data/ fallback correct).
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(project_root, "Data")
