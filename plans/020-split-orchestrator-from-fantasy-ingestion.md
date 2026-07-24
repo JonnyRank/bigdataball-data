@@ -145,15 +145,24 @@ the new fantasy-upload stage should copy
 ### Behavior change this refactor introduces (intended — document it)
 
 Today, a **per-file** error in the fantasy loop is appended to
-`pipeline_errors` (`daily_fantasy_log_upload.py:359-364`) and thus itemized in
-the email. After the split, the ingestion module handles per-file errors the
-`daily_player_upload.py` way — `print` + `break` — so a per-file fantasy error
-is **no longer itemized** in the email. A *stage-level* exception (e.g.
+`pipeline_errors` (`daily_fantasy_log_upload.py:359-364`), which makes the
+run's email subject `BigDataBall Pipeline: COMPLETED WITH ERRORS` and itemizes
+the failing file in the body. After the split, the ingestion module handles
+per-file errors the `daily_player_upload.py` way — `print` + `break`, no
+`pipeline_errors` — so `main()` returns normally, the orchestrator sees no
+exception, and the email is a **`SUCCESS`** (at most `(With Warnings)` if rows
+were dropped). **This is a notification-severity flip, not just a loss of
+itemization: a mid-loop failure on a corrupt file goes from a red "ERRORS"
+alert to a green "SUCCESS" one.** A *stage-level* exception (e.g.
 `initialize_database()` raising on a pre-existing duplicate, or a DB error
-during pre-load) is still caught by the orchestrator's try/except and appears
-as `CRITICAL ERROR in Fantasy Upload: ...`. This makes fantasy ingestion
-symmetric with player ingestion (whose per-file errors are already
-non-itemized). Accept this tradeoff; note it in the PR description.
+during pre-load) still `raise`s up and is caught by the orchestrator's
+try/except as `CRITICAL ERROR in Fantasy Upload: ...` (→ ERRORS email). This
+makes fantasy ingestion symmetric with player ingestion, which **already**
+`break`s silently on a per-file error and produces a SUCCESS email — so the two
+upload paths become consistent. This severity change should be signed off
+explicitly; call it out in the PR description. If per-file surfacing is later
+wanted, use the escape hatch in the maintenance notes (4th errors-list tuple
+element).
 
 ### Repo conventions that apply
 
@@ -388,14 +397,31 @@ Rewrite the file so it mirrors `daily_player_upload.py`. Keep the config block,
      unnecessary.)
    - Move the loop body (old lines 181–366) verbatim, including the
      `fantasy_logs_count` / `fantasy_logs_overwritten` / `fantasy_rows_dropped`
-     counters and the per-file `except ... break` at old lines 359–364.
+     counters — **with one required change**: the per-file `except` at old
+     lines 359–364 references `pipeline_errors`, which no longer exists in the
+     ingestion-only `main()` (it was defined at old line 88, in the
+     orchestration half you removed). Moving it verbatim would raise
+     `NameError` on the first per-file failure. **Reshape that `except` to the
+     `daily_player_upload.py:295-298` form** — drop the `error_msg =` line and
+     the `pipeline_errors.append(error_msg)` line, keeping only `print` +
+     `break`:
+     ```python
+             except Exception as e:
+                 print(f"\n*** ERROR processing {file_name}: {e} ***")
+                 print("Script will stop. The failed file was NOT moved.")
+                 break
+     ```
+     This is the only line in the loop body that references an
+     orchestration-half name; after this change the loop body is fully
+     self-contained.
    - End `main()` with:
      ```python
      print("\n--- All new files processed. ---")
      return fantasy_logs_count, fantasy_logs_overwritten, fantasy_rows_dropped
      ```
-     Delete the old post-loop orchestration (old lines 368–476) entirely — it
-     now lives in `run_pipeline.py`.
+     Delete the old post-loop code entirely (old line 368
+     `print("\n--- Ingestion Phase Complete ---")` **and** the orchestration at
+     old lines 370–476) — it now lives in `run_pipeline.py`.
 
 5. Keep `if __name__ == "__main__": main()` at the end.
 
@@ -784,14 +810,17 @@ For whoever owns this code next:
   `python -m bigdataball.run_pipeline`. This is the single operational action
   outside the repo; without it the daily job silently degrades to
   fantasy-ingestion-only. This is the top review item.
-- **Intended behavior change**: per-file errors in the fantasy loop are no
-  longer itemized in the notification email (they `print` + `break` like
-  `daily_player_upload.py`). Stage-level failures still appear as
-  `CRITICAL ERROR in Fantasy Upload`. If itemized per-file fantasy errors are
-  later deemed necessary, have `daily_fantasy_log_upload.main()` return a
-  fourth element (an errors list) and have the orchestrator extend
-  `pipeline_errors` with it — but that diverges from the
-  `daily_player_upload.main()` 3-tuple contract, so weigh it.
+- **Intended behavior change (severity flip)**: a per-file error in the
+  fantasy loop no longer sets the email to `COMPLETED WITH ERRORS` — the loop
+  `print`s + `break`s like `daily_player_upload.py`, so the run reports
+  `SUCCESS` (or `(With Warnings)`). Only stage-level failures still produce
+  `CRITICAL ERROR in Fantasy Upload`. This matches `daily_player_upload.py`'s
+  existing behavior, but it is a real drop in alert severity for a corrupt DFS
+  file — sign it off. If itemized/red-alert per-file fantasy errors are later
+  deemed necessary, have `daily_fantasy_log_upload.main()` return a fourth
+  element (an errors list) and have the orchestrator extend `pipeline_errors`
+  with it — but that diverges from the `daily_player_upload.main()` 3-tuple
+  contract, so weigh it.
 - A reviewer should confirm the fantasy loop moved **verbatim** (diff the loop
   body against `8c8bfc4`'s lines 181–366) and that the email/`todo_mappings`
   block moved **verbatim** — this refactor must not change ingestion or
