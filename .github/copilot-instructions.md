@@ -103,19 +103,19 @@ pip install -r requirements.txt
 
 The main pipeline entry point is:
 ```bash
-python daily_fantasy_log_upload.py
+python -m bigdataball.daily_fantasy_log_upload
 ```
 
 Individual scripts can also be run standalone:
 ```bash
-python daily_player_upload.py          # Just player box-score ingestion (+ DNP-DND-NWT absences)
-python backfill_player_absences.py <file...>  # One-shot backfill of player_absences from archived files
-python drive_ingestion.py              # Just Google Drive download
-python create_summary_tables.py        # Just rebuild averages + views
-python export_slate_averages_vw.py     # Just rebuild slate views
-python export_slate_averages_csv.py    # Just export slate CSV
-python run_db_patch.py                 # One-time name fix
-python verify_db_patch.py              # Verify name fix
+python -m bigdataball.daily_player_upload          # Just player box-score ingestion (+ DNP-DND-NWT absences)
+python -m bigdataball.backfill_player_absences <file...>  # One-shot backfill of player_absences from archived files
+python -m bigdataball.drive_ingestion              # Just Google Drive download
+python -m bigdataball.create_summary_tables        # Just rebuild averages + views
+python -m bigdataball.export_slate_averages_vw     # Just rebuild slate views
+python -m bigdataball.export_slate_averages_csv    # Just export slate CSV
+python -m bigdataball.run_db_patch                 # One-time name fix
+python -m bigdataball.verify_db_patch              # Verify name fix
 ```
 
 ## Testing

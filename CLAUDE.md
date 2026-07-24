@@ -22,25 +22,25 @@ An NBA DFS data pipeline in Python. It downloads player box-score and DraftKings
 ```bash
 pip install -r requirements.txt          # install deps
 
-python daily_fantasy_log_upload.py       # MAIN orchestrator — runs the full pipeline
+python -m bigdataball.daily_fantasy_log_upload       # MAIN orchestrator — runs the full pipeline
 ```
 
 `daily_fantasy_log_upload.py` is the whole-pipeline orchestrator despite its name. Requires a `.env` file with Drive/email credentials — see `docs/codebase/INTEGRATIONS.md`. Individual stages can be run standalone:
 
 ```bash
-python drive_ingestion.py            # download latest .xlsx from Google Drive
-python daily_player_upload.py        # ingest player box-score logs only
-python create_summary_tables.py      # rebuild fantasy_averages + player-average views
-python export_slate_averages_vw.py   # rebuild vw_daily_slate / vw_daily_slate_l30
-python export_playoffs_slate_averages_vw.py  # rebuild vw_daily_slate_playoffs
-python export_slate_averages_csv.py  # export slate averages to timestamped CSV
-python check_ingest_duplicates.py            # report duplicate (PLAYER_ID, DATE) log rows
-python check_ingest_duplicates.py --remove   # back up DB, then delete the duplicates
-python seed_map_teams.py             # create + populate map_teams (run once on a fresh DB)
-python create_log_indexes.py         # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
-python backfill_player_absences.py Data/Archived_Player_Logs/some-player-feed.xlsx [more.xlsx ...]  # one-shot: backfill player_absences from one or more archived player-feed files (paths required)
-python run_db_patch.py               # one-time retroactive player-name fix
-python verify_db_patch.py            # verify the name patch
+python -m bigdataball.drive_ingestion            # download latest .xlsx from Google Drive
+python -m bigdataball.daily_player_upload        # ingest player box-score logs only
+python -m bigdataball.create_summary_tables      # rebuild fantasy_averages + player-average views
+python -m bigdataball.export_slate_averages_vw   # rebuild vw_daily_slate / vw_daily_slate_l30
+python -m bigdataball.export_playoffs_slate_averages_vw  # rebuild vw_daily_slate_playoffs
+python -m bigdataball.export_slate_averages_csv  # export slate averages to timestamped CSV
+python -m bigdataball.check_ingest_duplicates            # report duplicate (PLAYER_ID, DATE) log rows
+python -m bigdataball.check_ingest_duplicates --remove   # back up DB, then delete the duplicates
+python -m bigdataball.seed_map_teams             # create + populate map_teams (run once on a fresh DB)
+python -m bigdataball.create_log_indexes         # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
+python -m bigdataball.backfill_player_absences Data/Archived_Player_Logs/some-player-feed.xlsx [more.xlsx ...]  # one-shot: backfill player_absences from one or more archived player-feed files (paths required)
+python -m bigdataball.run_db_patch               # one-time retroactive player-name fix
+python -m bigdataball.verify_db_patch            # verify the name patch
 ```
 
 ## Architecture

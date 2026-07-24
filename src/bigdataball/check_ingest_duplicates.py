@@ -22,12 +22,12 @@ Usage
 -----
 Report only (read-only, no writes) -- run this first:
 
-    python check_ingest_duplicates.py                      # both tables
-    python check_ingest_duplicates.py --table player_logs  # one table only
+    python -m bigdataball.check_ingest_duplicates                      # both tables
+    python -m bigdataball.check_ingest_duplicates --table player_logs  # one table only
 
 Remove duplicates (backs up the DB to a timestamped .bak-* first, then deletes):
 
-    python check_ingest_duplicates.py --remove
+    python -m bigdataball.check_ingest_duplicates --remove
 
 Only `--remove` writes to the database; without it the script just reports.
 
@@ -64,10 +64,10 @@ Removal (back up nba_fantasy_logs.db first):
 After removing rows, rebuild the derived data (games-played and every average
 were inflated):
 
-    python create_summary_tables.py
-    python export_slate_averages_vw.py
-    python export_playoffs_slate_averages_vw.py
-    python export_slate_averages_csv.py
+    python -m bigdataball.create_summary_tables
+    python -m bigdataball.export_slate_averages_vw
+    python -m bigdataball.export_playoffs_slate_averages_vw
+    python -m bigdataball.export_slate_averages_csv
 """
 
 import argparse
@@ -282,9 +282,10 @@ def main():
         if remaining == 0:
             print("\nDone. No duplicate (PLAYER_ID, DATE) rows remain.")
             print(
-                "Rebuild derived data next: create_summary_tables.py, "
-                "export_slate_averages_vw.py, export_playoffs_slate_averages_vw.py, "
-                "export_slate_averages_csv.py"
+                "Rebuild derived data next: python -m bigdataball.create_summary_tables, "
+                "python -m bigdataball.export_slate_averages_vw, "
+                "python -m bigdataball.export_playoffs_slate_averages_vw, "
+                "python -m bigdataball.export_slate_averages_csv"
             )
             return 0
         print(f"\nWARNING: {remaining} extra rows still remain after removal.")
