@@ -146,7 +146,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
 - **Misleading orchestrator filename** (`daily_fantasy_log_upload.py` is the orchestrator):
   documented in `CLAUDE.md`; renaming would break the documented invocation. Not worth it.
   **Superseded 2026-07-24 by plan 020** — rather than rename, the orchestration is being
-  extracted into a new `run_pipeline.py`, leaving `daily_fantasy_log_upload.py` as
+  extracted into a new `daily_pipeline.py`, leaving `daily_fantasy_log_upload.py` as
   fantasy-log ingestion only (parallel to `daily_player_upload.py`).
 
 ## New findings considered and rejected (plans 010–012 audit)
