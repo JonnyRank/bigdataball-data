@@ -122,8 +122,9 @@ they do so you don't "simplify" them back.
    repo has ~20 Markdown files with ```python``` fences (all of `plans/`, several
    `docs/codebase/*.md`) whose snippets are hand-written and not Ruff-formatted.
    Running the gate over `.` would therefore fail `ruff format --check` on
-   documentation. **Every Ruff command in this plan targets `src tests`** so the
-   gate only governs actual source. This is intentional — Markdown code-block
+   documentation. **Every *gate* command in this plan targets `src tests`** so the
+   gate only governs actual source (the bare `ruff check .` / `ruff format .`
+   forms appear below only as anti-patterns to avoid, never as gate commands). This is intentional — Markdown code-block
    formatting is explicitly out of scope (see Maintenance notes).
 
    The `src tests` scoping is the right call **independent of the exact 0.16.0
@@ -306,7 +307,9 @@ the ruleset rather than the executor bulk-suppressing.
 **Verify**:
 - `python -m pytest -q` → `68 passed` (lint changes must not alter behavior; if
   the count changed, a "trivial" fix wasn't trivial — revert it).
-- `ruff check src tests && ruff format --check src tests ; echo "gate_exit=$?"` → `gate_exit=0`.
+- `ruff check src tests && ruff format --check src tests` → **exits 0** (do NOT
+  append `; echo ...`: a trailing `echo` always exits 0 and would mask a Ruff
+  failure — the whole point is that this line's own exit status is the gate).
 
 ### Step 5: Update the plans index
 
@@ -329,7 +332,7 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -n "^ruff==" requirements-dev.txt` returns a pinned version
 - [ ] `grep -n "\[tool.ruff\]" pyproject.toml` returns the config section
 - [ ] `.github/workflows/test.yml` has a "Lint (Ruff)" step running `ruff check src tests` and `ruff format --check src tests` before the test step
-- [ ] `ruff check src tests && ruff format --check src tests ; echo $?` → `0`
+- [ ] `ruff check src tests && ruff format --check src tests` exits 0 (no trailing `echo` — the line's own exit status is the check)
 - [ ] `python -m pytest -q` → `68 passed`
 - [ ] Only in-scope files changed (`git status --short`); any source edits are import/whitespace-only (confirm via `git diff`)
 - [ ] `plans/README.md` status row for 018 updated to DONE
