@@ -21,6 +21,11 @@
 - **Category**: bug
 - **Planned at**: commit `aef8efa`, 2026-07-24
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/56
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean —
+  `git diff --stat aef8efa..HEAD -- src/bigdataball/drive_ingestion.py` is empty, and
+  the finding still holds (`io.FileIO(file_path, "wb")` at line 64 writes straight
+  to the final path; no temp-file/rename anywhere in the module). Excerpts and line
+  anchors below are current.
 
 ## Why this matters
 

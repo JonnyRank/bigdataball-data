@@ -21,6 +21,10 @@
 - **Category**: tests
 - **Planned at**: commit `aef8efa`, 2026-07-24
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/59
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean — the
+  `git diff --stat aef8efa..HEAD` over all five in-scope `src/` files is empty, and
+  the finding still holds (`tests/` contains no `test_export_*.py`). Excerpts and
+  line anchors below are current; the suite baseline is still **68**.
 
 ## Why this matters
 

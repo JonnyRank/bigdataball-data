@@ -21,6 +21,11 @@
 - **Depends on**: none
 - **Category**: tech-debt
 - **Planned at**: commit `8c8bfc4`, 2026-07-24
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/62
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean — no `src/` or `tests/`
+  file has changed since `8c8bfc4` (the only commits since are plan documents), so
+  every "Current state" excerpt and line anchor below still holds. Suite still
+  **68** tests.
 
 ## Why this matters
 

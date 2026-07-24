@@ -23,6 +23,11 @@
 - **Category**: dx
 - **Planned at**: commit `91fa6a0`, 2026-07-24
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/64
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean —
+  `git diff --stat 91fa6a0..HEAD -- pyproject.toml requirements-dev.txt .claude/hooks/session-start.sh .pre-commit-config.yaml`
+  is empty, no `.pre-commit-config.yaml` exists yet, and the hard dependency on
+  plan 018 is still unmet (018 remains TODO). Step 0's STOP condition therefore
+  still applies — do not start this plan before 018 lands.
 
 ## Why this matters
 
