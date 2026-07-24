@@ -22,7 +22,7 @@ Usage
 -----
 Report only (read-only, no writes) -- run this first:
 
-    python -m bigdataball.check_ingest_duplicates                      # both tables
+    python -m bigdataball.check_ingest_duplicates                      # all tables
     python -m bigdataball.check_ingest_duplicates --table player_logs  # one table only
 
 Remove duplicates (backs up the DB to a timestamped .bak-* first, then deletes):
