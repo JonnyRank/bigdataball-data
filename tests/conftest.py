@@ -5,20 +5,20 @@ import types
 import pytest
 
 _FANTASY_DEPS = [
-    "daily_fantasy_log_upload",
-    "daily_player_upload",
-    "create_summary_tables",
-    "export_slate_averages_vw",
-    "export_playoffs_slate_averages_vw",
-    "export_slate_averages_csv",
-    "email_notifier",
-    "drive_ingestion",
+    "bigdataball.daily_fantasy_log_upload",
+    "bigdataball.daily_player_upload",
+    "bigdataball.create_summary_tables",
+    "bigdataball.export_slate_averages_vw",
+    "bigdataball.export_playoffs_slate_averages_vw",
+    "bigdataball.export_slate_averages_csv",
+    "bigdataball.email_notifier",
+    "bigdataball.drive_ingestion",
 ]
 
 # Modules that require external services (Google APIs, SMTP) and must be stubbed
 # so the fixture can import daily_fantasy_log_upload without network/credential deps.
 _STUB_MODULES = {
-    "drive_ingestion": {"main": lambda: None},
+    "bigdataball.drive_ingestion": {"main": lambda: None},
     "googleapiclient": {},
     "googleapiclient.discovery": {},
     "google": {},
@@ -53,7 +53,7 @@ def fantasy_upload(tmp_path, monkeypatch):
             sys.modules[mod_name] = stub
             stub_names_added.append(mod_name)
 
-    module = importlib.import_module("daily_fantasy_log_upload")
+    module = importlib.import_module("bigdataball.daily_fantasy_log_upload")
 
     # A test that drives main() to completion sends a REAL email when the
     # developer's .env has EMAIL_ENABLED — indistinguishable from a production
@@ -92,12 +92,12 @@ def player_upload(tmp_path, monkeypatch):
     # (pop + import_module already yields a fresh import that reads the env var; do NOT
     # also call importlib.reload here — that would re-run module-level code a second time,
     # creating the engine twice and calling os.makedirs twice.)
-    sys.modules.pop("daily_player_upload", None)
-    module = importlib.import_module("daily_player_upload")
+    sys.modules.pop("bigdataball.daily_player_upload", None)
+    module = importlib.import_module("bigdataball.daily_player_upload")
 
     yield module
 
     # Dispose the SQLAlchemy engine so its SQLite connection pool releases the
     # DB file before tmp_path cleanup (otherwise Windows can't delete the locked file).
     module.engine.dispose()
-    sys.modules.pop("daily_player_upload", None)
+    sys.modules.pop("bigdataball.daily_player_upload", None)

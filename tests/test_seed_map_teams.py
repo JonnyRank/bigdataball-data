@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-import seed_map_teams
+from bigdataball import seed_map_teams
 
 
 def test_normalize_collapses_and_lowercases():
