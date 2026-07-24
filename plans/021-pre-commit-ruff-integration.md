@@ -105,7 +105,7 @@ exit 0
 | Install pre-commit + ruff (dev) | `pip install -r requirements-dev.txt` | exit 0 |
 | Wire the git hook locally | `pre-commit install` | prints `pre-commit installed at .git/hooks/pre-commit` |
 | Run all hooks over the repo | `pre-commit run --all-files` | all hooks `Passed` (after any auto-fix + re-run) |
-| Full test suite (unchanged) | `python -m pytest -q` | `68 passed` |
+| Full test suite (unchanged) | `python -m pytest -q` | same count as before your changes (68 if only 018 precedes 021; more if 019 has landed) |
 
 ## Scope
 
@@ -204,7 +204,11 @@ Notes for the executor:
 - Do NOT add `types_or`/markdown to these hooks. The `files: ^(src|tests)/` scope
   plus Ruff's Python-only defaults keep the hook off `.md` and `.claude/`.
 
-**Verify**: `python -c "import yaml; yaml.safe_load(open('.pre-commit-config.yaml')); print('yaml ok')"` → prints `yaml ok`. And `grep -n 'files: \^(src|tests)/' .pre-commit-config.yaml` returns **two** lines (one per hook).
+**Verify**: `grep -n 'files: \^(src|tests)/' .pre-commit-config.yaml` returns
+**two** lines (one per hook). Do **not** add a `python -c "import yaml; ..."`
+check here — PyYAML is not a declared dependency and may be absent in a clean
+env; full YAML/schema validity is checked in Step 5 with
+`pre-commit validate-config` once `pre-commit` is installed in Step 2.
 
 ### Step 2: Add `pre-commit` to the dev dependencies
 
@@ -233,9 +237,17 @@ the `# Make the venv the default interpreter ...` block, insert:
 # Auto-enroll Claude Code on the web sessions in the git pre-commit hooks (plan
 # 021) so commits made from a cloud session run the same Ruff format/lint as CI.
 # pre-commit is installed via requirements-dev.txt above. Never fail the session
-# on it — the hook is convenience; CI (plan 018) is the enforcement.
-"$VENV_DIR/bin/pre-commit" install --install-hooks >/dev/null 2>&1 || true
+# on it — the hook is convenience; CI (plan 018) is the enforcement — but DO
+# surface a failure so a cloud session isn't silently left without the hook.
+if ! "$VENV_DIR/bin/pre-commit" install --install-hooks >/dev/null 2>&1; then
+  echo "Warning: pre-commit hook install failed; CI (plan 018) remains the enforcement." >&2
+fi
 ```
+
+The `if ! ...; then ... fi` form stays **non-fatal** — a command in an `if`
+condition is exempt from the script's `set -e`, so the session continues to
+`exit 0` regardless — while still emitting a warning to stderr instead of the
+silent `|| true`. (Do not revert to bare `|| true`: it hides a broken enrollment.)
 
 This runs only in remote sessions (the whole script is already guarded by the
 `CLAUDE_CODE_REMOTE` check near the top), so a developer's local machine is never
@@ -243,7 +255,7 @@ touched by this line — local users opt in explicitly via Step 4's documented
 command. `--install-hooks` also pre-fetches the hook environment so the first
 cloud commit isn't slow.
 
-**Verify**: `grep -n 'pre-commit install --install-hooks' .claude/hooks/session-start.sh` returns the inserted line, positioned after the `requirements-dev.txt` install and before the `CLAUDE_ENV_FILE` block (`sed -n` around it to confirm ordering). `bash -n .claude/hooks/session-start.sh` → exits 0 (valid shell syntax).
+**Verify**: `grep -n 'pre-commit install --install-hooks' .claude/hooks/session-start.sh` returns the inserted line, positioned after the `requirements-dev.txt` install and before the `CLAUDE_ENV_FILE` block (`sed -n` around it to confirm ordering); `grep -n 'Warning: pre-commit hook install failed' .claude/hooks/session-start.sh` returns the warning line (confirms the non-silent form). `bash -n .claude/hooks/session-start.sh` → exits 0 (valid shell syntax). (The runtime effect — `.git/hooks/pre-commit` actually being written — is exercised locally in Step 5; a cloud SessionStart can't be simulated here.)
 
 ### Step 4: Document the one-time local setup
 
@@ -263,7 +275,12 @@ clone — the git hook cannot install itself into a clone nobody has touched.
    already describes the SessionStart hook, add one bullet noting that the
    SessionStart hook also runs `pre-commit install` (cloud auto-enroll), and that
    `.pre-commit-config.yaml` mirrors the CI Ruff gate on `src`/`tests` using the
-   same `[tool.ruff]` config, `rev` pinned to the `ruff==` version.
+   same `[tool.ruff]` config, `rev` pinned to the `ruff==` version. Include a
+   sentence setting the expectation that, because the hooks auto-fix, a **cloud
+   session's commit will abort the first time if it reformats staged files** —
+   the session then re-stages (`git add -u`) and commits again. This is steady-
+   state behavior for every enrolled session, not a one-off, so it shouldn't be
+   mistaken for an error.
 
 Keep both edits brief and match the surrounding prose style.
 
@@ -272,7 +289,12 @@ Keep both edits brief and match the surrounding prose style.
 ### Step 5: Prove the hook works (create → fix → clean)
 
 1. Install and wire it: `pip install -r requirements-dev.txt && pre-commit install`
-   → prints `pre-commit installed at .git/hooks/pre-commit`.
+   → prints `pre-commit installed at .git/hooks/pre-commit`. Then confirm the
+   config parses and the hook file was written (this is the YAML/schema check
+   deferred from Step 1 — it uses `pre-commit`, so no PyYAML dependency):
+   `pre-commit validate-config .pre-commit-config.yaml` → exits 0 (no output on
+   success), and `test -f .git/hooks/pre-commit && echo "hook installed"` →
+   prints `hook installed`.
 
 2. Run it over the whole repo: `pre-commit run --all-files`. On a tree where plan
    018 already left `src`/`tests` clean, both hooks report **`Passed`** (or
@@ -301,8 +323,11 @@ throwaway is gone (`test ! -e src/bigdataball/_pretest_tmp.py`).
 
 ### Step 6: Confirm the suite is unaffected and update the index
 
-`python -m pytest -q` → `68 passed` (this plan adds no code paths; the count is
-unchanged — confirms you didn't accidentally edit source).
+`python -m pytest -q` → the **same count as before your changes** (68 on a tree
+where only plan 018 precedes 021; higher if plan 019 — a test plan, also `TODO`
+with no hard ordering vs 021 — has already landed). This plan adds no code paths,
+so the number must be *unchanged by your work*; if it moved, you accidentally
+edited source.
 
 Then update `plans/README.md`: the "Execution order & status" table already has a
 `TODO` row for plan 021 — **update that existing row in place** to DONE (do NOT
@@ -312,8 +337,8 @@ add a second 021 row), and confirm the "Depends on" column shows 018.
 
 - No new pytest tests — pre-commit is a git-level tool, not application code.
   Verification is the Step 5 manual sequence (`pre-commit run --all-files` clean;
-  a throwaway bad file is caught then deleted) plus the unchanged `68 passed`
-  suite as the regression guard that no source was altered.
+  a throwaway bad file is caught then deleted) plus the full suite (count
+  unchanged by this plan) as the regression guard that no source was altered.
 - If the repo later wants automated coverage of the hook config, a CI job could
   run `pre-commit run --all-files` — but that overlaps plan 018's gate and is
   intentionally **not** added here (see Maintenance).
@@ -322,13 +347,14 @@ add a second 021 row), and confirm the "Depends on" column shows 018.
 
 Machine-checkable. ALL must hold:
 
-- [ ] `.pre-commit-config.yaml` exists, is valid YAML, pins `ruff-pre-commit` `rev` to `v<ruff version from requirements-dev.txt>`, and scopes both hooks with `files: ^(src|tests)/`
+- [ ] `.pre-commit-config.yaml` exists, pins `ruff-pre-commit` `rev` to `v<ruff version from requirements-dev.txt>`, scopes both hooks with `files: ^(src|tests)/`, and `pre-commit validate-config .pre-commit-config.yaml` exits 0
 - [ ] `grep -nE '^pre-commit==' requirements-dev.txt` returns a pinned version; the `ruff==` pin is unchanged
-- [ ] `.claude/hooks/session-start.sh` runs `pre-commit install --install-hooks` (after the requirements install, `|| true`), and `bash -n` on it exits 0
+- [ ] `.claude/hooks/session-start.sh` runs `pre-commit install --install-hooks` inside the `CLAUDE_CODE_REMOTE` guard, in the non-fatal warn-don't-fail form (emits a `Warning:` on failure, does not exit non-zero), and `bash -n` on it exits 0
 - [ ] `CLAUDE.md` documents the one-time local `pre-commit install`
-- [ ] `docs/codebase/INTEGRATIONS.md` mentions the pre-commit hook + cloud auto-enroll
+- [ ] `docs/codebase/INTEGRATIONS.md` mentions the pre-commit hook + cloud auto-enroll (incl. the abort-and-recommit expectation)
+- [ ] After `pre-commit install`, `test -f .git/hooks/pre-commit` succeeds
 - [ ] `pre-commit run --all-files` passes with **no** changes to `src/`/`tests/` (`git status` clean afterward)
-- [ ] `python -m pytest -q` → `68 passed`
+- [ ] `python -m pytest -q` shows the **same count as before your changes** (68 if only 018 precedes 021; unchanged by 021 regardless of whether 019 has landed)
 - [ ] `git status --short` shows only the in-scope files (plus `plans/README.md`); no `src/`/`tests/`/`pyproject.toml`/`test.yml` changes
 - [ ] `plans/README.md` status row for 021 updated to DONE
 
@@ -364,4 +390,5 @@ Stop and report back (do not improvise) if:
   out of this plan.
 - Reviewer should confirm: the hook is scoped to `src`/`tests` (not `.`), the
   `rev` matches the `ruff==` pin, and the `session-start.sh` addition stays
-  inside the `CLAUDE_CODE_REMOTE` guard and can't fail the session (`|| true`).
+  inside the `CLAUDE_CODE_REMOTE` guard and stays non-fatal (the warn-don't-fail
+  `if ! ...; then echo Warning >&2; fi` form, not a silent `|| true`).
