@@ -863,7 +863,7 @@ against the live file first — line numbers may have shifted):
 
 Set the plan 020 row in the status table to DONE:
 
-```
+```text
 | 020  | Split the pipeline orchestrator out of `daily_fantasy_log_upload.py` | P2 | M | none | DONE | — |
 ```
 
