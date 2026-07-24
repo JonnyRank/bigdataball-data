@@ -20,6 +20,19 @@
 - **Depends on**: none
 - **Category**: dx
 - **Planned at**: commit `aef8efa`, 2026-07-24
+- **Reviewed 2026-07-24 (Ruff 0.16.0)**: `review-plan` pass triggered by Ruff
+  0.16.0 (released 2026-07-23), which grew the *default* lint rule set from 59 to
+  413 rules and made `ruff format` reformat Python code blocks inside Markdown by
+  default. Outcome: (1) the lint side is **unaffected** — this plan pins the rule
+  set with an explicit `select` (an exact allowlist that overrides Ruff's
+  defaults entirely; see "Note on Ruff ≥ 0.16.0" below), so the 59→413 default
+  jump changes nothing about which rules run; (2) the **format gate was scoped to
+  `src tests`** (was `.`), because `ruff format --check .` would now also
+  format-check the ~20 Markdown files in `docs/` and `plans/` that contain
+  ```python``` code fences (including these plan files) and fail CI on
+  documentation rather than source. The three target files
+  (`pyproject.toml`, `requirements-dev.txt`, `.github/workflows/test.yml`) are
+  unchanged since `aef8efa`, so the drift check base still holds.
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/58
 
 ## Why this matters
@@ -78,14 +91,45 @@ where = ["src"]
   linted. STACK.md states the code already reflects "the Ruff formatter
   defaults," so `ruff format --check` is *expected* to pass on the current tree
   — Step 1 verifies whether that's actually true before wiring the gate.
+- **All Python in this repo lives under `src/` and `tests/`** — plan 009 moved
+  every module into the `src/bigdataball/` package, so there is no root-level
+  `.py`. That is why every Ruff command below targets `src tests` explicitly
+  rather than `.` (see the next section for why `.` is actively wrong here).
+
+## Note on Ruff ≥ 0.16.0 (read before running any command)
+
+Ruff 0.16.0 (2026-07-23) changed two things that matter to this plan. Both are
+already accounted for below; this note explains *why* the commands look the way
+they do so you don't "simplify" them back.
+
+1. **The default lint rule set grew from 59 to 413 rules.** This does **not**
+   affect this plan, because Step 2 configures an explicit
+   `select = ["E", "F", "W", "I"]`. In Ruff, `select` is an *exact allowlist*: it
+   implicitly disables every rule and then enables only the listed ones —
+   `select` **replaces** Ruff's built-in defaults (that is what distinguishes it
+   from `extend-select`, which *adds to* the defaults). So the rule set this gate
+   enforces is exactly E, F, W, I regardless of how large Ruff's default set
+   becomes. Do **not** switch `select` to `extend-select` — that would pull in
+   all 413 default rules and flood CI. If you ever run a *bare* `ruff check .`
+   (no `--select`) for exploration, expect hundreds of violations from the new
+   defaults; that is not this gate.
+
+2. **`ruff format` now reformats Python code blocks inside Markdown by default,**
+   and `ruff format .` (or `ruff format --check .`) recurses into `.md` files. This
+   repo has ~20 Markdown files with ```python``` fences (all of `plans/`, several
+   `docs/codebase/*.md`) whose snippets are hand-written and not Ruff-formatted.
+   Running the gate over `.` would therefore fail `ruff format --check` on
+   documentation. **Every Ruff command in this plan targets `src tests`** so the
+   gate only governs actual source. This is intentional — Markdown code-block
+   formatting is explicitly out of scope (see Maintenance notes).
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
 | Install Ruff | `pip install ruff` | exit 0 |
-| Discover format state | `ruff format --check .` | exit 0 = already formatted (see Step 1) |
-| Discover lint state | `ruff check .` | exit 0 = clean (see Step 1) |
+| Discover format state | `ruff format --check src tests` | exit 0 = already formatted (see Step 1) |
+| Discover lint state | `ruff check --select E,F,W,I src tests` | exit 0 = clean (see Step 1) |
 | Full test suite (unchanged) | `python -m pytest -q` | `68 passed` |
 
 ## Scope
@@ -117,25 +161,30 @@ where = ["src"]
 
 ### Step 1: Discover the actual lint/format state (decides the rest of the plan)
 
-Install Ruff and run both checks against the current tree, capturing exit codes.
-**Discover with the exact ruleset the CI gate will use** (`E,F,W,I` — the same
-`select` you configure in Step 2), not Ruff's defaults: Ruff's default set is
-`E,F` only, so a bare `ruff check .` here could report clean while the configured
-gate later fails on a `W` or `I` (import-order) violation — which would skip
-Step 3 and make CI red immediately after the plan lands. Passing `--select`
-explicitly makes Step 1's discovery match the gate:
+Install Ruff and run both checks against the Python source (`src tests`),
+capturing exit codes. Two deliberate choices (see "Note on Ruff ≥ 0.16.0"):
+
+- **Discover with the exact ruleset the CI gate will use** (`--select E,F,W,I`,
+  the same `select` you configure in Step 2), not Ruff's defaults. As of Ruff
+  0.16.0 the default rule set is huge (413 rules), so a *bare* `ruff check .`
+  would report hundreds of violations that this gate does not enforce; and even
+  on older Ruff the default omitted `W`/`I`. Either way the bare command does not
+  match the gate — passing `--select` explicitly makes discovery match it.
+- **Target `src tests`, not `.`** — Ruff 0.16.0's `ruff format` recurses into
+  Markdown and would format-check the ```python``` fences in `plans/`/`docs/`,
+  failing on documentation. Scope to the Python source.
 
 ```console
 pip install ruff
-ruff format --check . ; echo "format_exit=$?"
-ruff check --select E,F,W,I . ; echo "lint_exit=$?"
+ruff format --check src tests ; echo "format_exit=$?"
+ruff check --select E,F,W,I src tests ; echo "lint_exit=$?"
 ```
 
 Record both exit codes and the violation output. This branches the plan:
 
 - **format_exit=0 and lint_exit=0** → the tree is already clean. Skip Step 3
   entirely; go straight to Step 2 then Step 4.
-- **format_exit≠0** → `ruff format` would reformat files. Run `ruff format .`
+- **format_exit≠0** → `ruff format` would reformat files. Run `ruff format src tests`
   (no `--check`) to apply formatting, then `git diff --stat` to see what
   changed. If the diff is pure whitespace/quote/wrap changes across the existing
   files, that is acceptable (it's the formatter the repo already claims to use).
@@ -159,9 +208,12 @@ ruff==<the version from `ruff --version`>
 ```
 
 2. Add a minimal `[tool.ruff]` section to `pyproject.toml` (after the existing
-   `[tool.setuptools.packages.find]` block). Keep it conservative — the default
-   rule set (`E`/`F`/`W`) plus import sorting (`I`), matching the observed
-   style:
+   `[tool.setuptools.packages.find]` block). Keep it conservative — an explicit,
+   small allowlist of pycodestyle errors + Pyflakes + warnings (`E`/`F`/`W`) plus
+   import sorting (`I`), matching the observed style. Use `select` (an exact
+   allowlist that overrides Ruff's defaults), **not** `extend-select` — see "Note
+   on Ruff ≥ 0.16.0": `extend-select` would layer these on top of Ruff's 413
+   default rules and flood CI.
 
 ```toml
 [tool.ruff]
@@ -184,12 +236,16 @@ select = ["E", "F", "W", "I"]
 ```yaml
       - name: Lint (Ruff)
         run: |
-          ruff check .
-          ruff format --check .
+          ruff check src tests
+          ruff format --check src tests
 
       - name: Run tests
         run: python -m pytest -q
 ```
+
+(The `src tests` scope is load-bearing, not cosmetic — see "Note on Ruff ≥
+0.16.0". `ruff check`/`ruff format --check` over `.` would drag Ruff into the
+Markdown under `plans/` and `docs/` and fail the gate on documentation.)
 
 **Verify**:
 - `grep -n "^ruff==" requirements-dev.txt` → returns the pinned line.
@@ -198,11 +254,11 @@ select = ["E", "F", "W", "I"]
 
 ### Step 3: (Only if Step 1 found lint violations) Triage them conservatively
 
-For each violation from `ruff check .`:
+For each violation from `ruff check --select E,F,W,I src tests`:
 
-**3a — trivially safe auto-fixes.** Run `ruff check --fix .` which applies only
-Ruff's fixes marked safe (unused-import removal, import sorting). Then re-run
-`ruff check .` and inspect `git diff`. Accept the diff **only if** every hunk is
+**3a — trivially safe auto-fixes.** Run `ruff check --fix src tests` which applies
+only Ruff's fixes marked safe (unused-import removal, import sorting). Then re-run
+`ruff check src tests` and inspect `git diff`. Accept the diff **only if** every hunk is
 an import reorder or an unused-import/whitespace removal. If any fix removes an
 import that is actually used at runtime via a side effect (e.g. a module
 imported for its import-time registration), revert that specific fix and
@@ -225,15 +281,15 @@ number of distinct violations is large (more than a handful of rule codes) or
 any requires touching pipeline logic, STOP and report — a human should decide
 the ruleset rather than the executor bulk-suppressing.
 
-**Verify**: after 3a/3b, `ruff check . ; echo $?` → `0` and
-`ruff format --check . ; echo $?` → `0`.
+**Verify**: after 3a/3b, `ruff check src tests ; echo $?` → `0` and
+`ruff format --check src tests ; echo $?` → `0`.
 
 ### Step 4: Confirm the suite still passes and the gate is green locally
 
 **Verify**:
 - `python -m pytest -q` → `68 passed` (lint changes must not alter behavior; if
   the count changed, a "trivial" fix wasn't trivial — revert it).
-- `ruff check . && ruff format --check . ; echo "gate_exit=$?"` → `gate_exit=0`.
+- `ruff check src tests && ruff format --check src tests ; echo "gate_exit=$?"` → `gate_exit=0`.
 
 ### Step 5: Update the plans index
 
@@ -255,8 +311,8 @@ Machine-checkable. ALL must hold:
 
 - [ ] `grep -n "^ruff==" requirements-dev.txt` returns a pinned version
 - [ ] `grep -n "\[tool.ruff\]" pyproject.toml` returns the config section
-- [ ] `.github/workflows/test.yml` has a "Lint (Ruff)" step running `ruff check .` and `ruff format --check .` before the test step
-- [ ] `ruff check . && ruff format --check . ; echo $?` → `0`
+- [ ] `.github/workflows/test.yml` has a "Lint (Ruff)" step running `ruff check src tests` and `ruff format --check src tests` before the test step
+- [ ] `ruff check src tests && ruff format --check src tests ; echo $?` → `0`
 - [ ] `python -m pytest -q` → `68 passed`
 - [ ] Only in-scope files changed (`git status --short`); any source edits are import/whitespace-only (confirm via `git diff`)
 - [ ] `plans/README.md` status row for 018 updated to DONE
@@ -265,11 +321,11 @@ Machine-checkable. ALL must hold:
 
 Stop and report back (do not improvise) if:
 
-- `ruff format .` (Step 1) would change the *contents* of any string literal or
-  SQL statement — formatting must be whitespace/layout only.
-- `ruff check .` reports more than a handful of distinct rule codes, or any
-  violation whose only fix is a logic change — the ruleset scope is then a human
-  decision, not the executor's.
+- `ruff format src tests` (Step 1) would change the *contents* of any string
+  literal or SQL statement — formatting must be whitespace/layout only.
+- `ruff check --select E,F,W,I src tests` reports more than a handful of distinct
+  rule codes, or any violation whose only fix is a logic change — the ruleset
+  scope is then a human decision, not the executor's.
 - Any lint "fix" changes the `68 passed` test count.
 - The target files don't match the "Current state" excerpts (drift).
 
@@ -277,9 +333,19 @@ Stop and report back (do not improvise) if:
 
 - Keep the ruleset small on purpose. Expanding `select` (e.g. adding `B`, `UP`,
   `SIM`) is a separate, opt-in decision — do it in its own PR so the churn is
-  reviewable, not bundled with wiring the gate.
+  reviewable, not bundled with wiring the gate. Because the gate uses `select`
+  (not `extend-select`), it is pinned to exactly E/F/W/I and is unaffected by
+  Ruff bumping its *default* rule set (which jumped 59→413 in 0.16.0).
+- **Markdown code-block formatting is intentionally not gated.** Ruff ≥ 0.16.0
+  can format ```python``` blocks inside `.md` files, but the gate targets
+  `src tests` only, so the hand-written snippets in `plans/`/`docs/` are left
+  alone. If you ever *want* to format those (e.g. `ruff format docs plans`), do
+  it as a separate, deliberate change — never widen the CI gate to `.`, which
+  would fail on every unformatted doc snippet.
 - The Ruff version is pinned for reproducibility; a Dependabot/maintenance bump
-  should be reviewed because a new Ruff can introduce new default diagnostics.
+  should be reviewed because a new Ruff can introduce new default diagnostics
+  (again: `select` shields the *lint* set, but a formatter change across a minor
+  version can still shift `ruff format --check` output on `src tests`).
 - STACK.md says the code already follows Ruff defaults — if Step 1 contradicts
   that (large format diff), update STACK.md's "Linting / Formatting" note to
   match the reality this plan establishes.
