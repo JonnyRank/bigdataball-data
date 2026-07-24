@@ -85,7 +85,7 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 018  | Add a Ruff lint/format gate to CI | P3 | S | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#58](https://github.com/JonnyRank/bigdataball-data/issues/58) |
 | 019  | Add tests for the export view-builder scripts | P2 | M | none | TODO (deep audit 2026-07-24 @ `aef8efa`) | [#59](https://github.com/JonnyRank/bigdataball-data/issues/59) |
 | 020  | Split the pipeline orchestrator out of `daily_fantasy_log_upload.py` | P2 | M | none | TODO (user-requested `plan` 2026-07-24 @ `8c8bfc4`) | — |
-| 021  | pre-commit Ruff hook + cloud session auto-enroll | P3 | S–M | **018** | TODO (user-requested `plan` 2026-07-24 @ `91fa6a0`) | — |
+| 021  | pre-commit Ruff hook + cloud session auto-enroll | P3 | S–M | **018** | TODO (user-requested `plan` 2026-07-24 @ `91fa6a0`) | [#64](https://github.com/JonnyRank/bigdataball-data/issues/64) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

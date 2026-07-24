@@ -22,7 +22,7 @@
   hard STOP condition in Step 0.
 - **Category**: dx
 - **Planned at**: commit `91fa6a0`, 2026-07-24
-- **Issue**: <!-- filled in by the --issues publish step -->
+- **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/64
 
 ## Why this matters
 
