@@ -87,7 +87,7 @@ def send_email_alert(subject, body):
 |---------|---------|---------------------|
 | Install deps (editable pkg) | `pip install -e . && pip install -r requirements-dev.txt` | exit 0 |
 | Run the new test file | `python -m pytest -q tests/test_email_notifier.py` | all pass |
-| Full suite | `python -m pytest -q` | `69 passed` (68 existing + 1 new) |
+| Full suite | `python -m pytest -q` | `70 passed` (68 existing + 2 new) |
 
 ## Scope
 
