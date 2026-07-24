@@ -166,6 +166,9 @@ they do so you don't "simplify" them back.
   SQL strings, or control flow. If a lint rule would require a logic change,
   suppress the rule (Step 3b) instead of changing behavior.
 - The other workflow files (`claude*.yml`) — the lint gate goes in `test.yml`.
+- `.claude/**` — the vendored skill helper `scan.py` and any other `.claude`
+  scripts are intentionally **not** gated (they are not first-party pipeline
+  code); the `src tests` scope already excludes them.
 
 ## Git workflow
 
