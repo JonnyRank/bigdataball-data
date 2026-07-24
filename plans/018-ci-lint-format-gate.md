@@ -91,10 +91,13 @@ where = ["src"]
   linted. STACK.md states the code already reflects "the Ruff formatter
   defaults," so `ruff format --check` is *expected* to pass on the current tree
   — Step 1 verifies whether that's actually true before wiring the gate.
-- **All Python in this repo lives under `src/` and `tests/`** — plan 009 moved
+- **All first-party Python lives under `src/` and `tests/`** — plan 009 moved
   every module into the `src/bigdataball/` package, so there is no root-level
-  `.py`. That is why every Ruff command below targets `src tests` explicitly
-  rather than `.` (see the next section for why `.` is actively wrong here).
+  `.py`. The only other `.py` anywhere in the tree is a vendored skill helper,
+  `.claude/skills/acquire-codebase-knowledge/scripts/scan.py`, which is **not**
+  first-party pipeline code and is intentionally left out of the gate. That is
+  why every Ruff command below targets `src tests` explicitly rather than `.`
+  (see the next section for why `.` is actively wrong here).
 
 ## Note on Ruff ≥ 0.16.0 (read before running any command)
 
@@ -122,6 +125,20 @@ they do so you don't "simplify" them back.
    documentation. **Every Ruff command in this plan targets `src tests`** so the
    gate only governs actual source. This is intentional — Markdown code-block
    formatting is explicitly out of scope (see Maintenance notes).
+
+   The `src tests` scoping is the right call **independent of the exact 0.16.0
+   formatter detail**: it also keeps the gate off the one vendored non-first-party
+   script (`.claude/.../scan.py`) and confines linting/formatting to first-party
+   source. So even if the "formats Markdown by default" behavior is ever nuanced
+   by a point release, the action here still holds — do not widen the gate to `.`.
+
+3. **Two command forms, both intentional — not an inconsistency.** *Before* Step 2
+   writes the `[tool.ruff.lint] select` to `pyproject.toml`, discovery and triage
+   pass `--select E,F,W,I` explicitly (Step 1, Step 3 header) so they match the
+   gate without relying on config that isn't there yet. *After* Step 2, the bare
+   `ruff check src tests` (Step 3 Verify, Step 4, Done criteria, CI YAML) inherits
+   that same `select` from `pyproject.toml`. Both run exactly E/F/W/I — the
+   explicit flag is only needed pre-config.
 
 ## Commands you will need
 
