@@ -2,34 +2,38 @@
 
 ## Layout
 
-Flat layout — all Python modules live at the repo root (no `src/` package). A `src/bigdataball/` refactor is *planned* (`plans/009-flat-to-src-layout.md`) but **not yet executed**: commit `90bc0ab` titled "Convert flat layout to src/bigdataball/ package" only added the plan document. See `CONCERNS.md` (Intent vs. Reality).
+Src layout — all runtime modules live under the installable `src/bigdataball/` package and import each other with package-relative imports (`from . import mappings`). This was the `src/bigdataball/` refactor tracked by `plans/009-flat-to-src-layout.md`, executed 2026-07-24 (the earlier flat layout at the repo root is gone). See `CONCERNS.md` (Intent vs. Reality).
 
 ```
 bigdataball-data/
-├── daily_fantasy_log_upload.py     # MAIN orchestrator (despite the name)
-├── daily_player_upload.py          # ingest player box-score logs
-├── absence_ingestion.py            # shared: DNP-DND-NWT sheet → player_absences (+ learn dim_players)
-├── backfill_player_absences.py     # one-shot CLI: backfill player_absences from archived files
-├── patch_absence_column_names.py   # one-time: rename player_absences GAME_DATE/PLAYER_NAME → DATE/PLAYER
-├── drive_ingestion.py              # download latest .xlsx from Google Drive
-├── auth_manager.py                 # 3-legged Google OAuth helper
-├── config.py                       # download dir, Drive job defs, email settings (loads .env)
-├── paths.py                        # resolve_base_data_path() — single path-resolution helper
-├── mappings.py                     # PLAYER_NAME_MAP (variant → canonical name)
-├── seasons.py                      # SLATE_SEASONS / L30_SEASON / PLAYOFFS_SEASON constants
-├── dk_matching.py                  # shared DraftKings load + fuzzy-match helper (used by all exports)
-├── seed_map_teams.py               # create + populate the map_teams table
-├── create_summary_tables.py        # build fantasy_averages + player-average views
-├── export_slate_averages_vw.py     # build vw_daily_slate / vw_daily_slate_l30
-├── export_playoffs_slate_averages_vw.py  # build vw_daily_slate_playoffs
-├── export_slate_averages_csv.py    # export slate averages to timestamped CSV
-├── email_notifier.py               # SMTP success/error notification
-├── check_ingest_duplicates.py      # report/remove duplicate (PLAYER_ID, DATE) rows
-├── create_log_indexes.py           # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
-├── run_db_patch.py                 # one-time retroactive player-name fix
-├── verify_db_patch.py              # verify the name patch
+├── src/bigdataball/                # the installable package (src layout, plan 009)
+│   ├── __init__.py
+│   ├── daily_fantasy_log_upload.py     # MAIN orchestrator (despite the name)
+│   ├── daily_player_upload.py          # ingest player box-score logs
+│   ├── absence_ingestion.py            # shared: DNP-DND-NWT sheet → player_absences (+ learn dim_players)
+│   ├── backfill_player_absences.py     # one-shot CLI: backfill player_absences from archived files
+│   ├── patch_absence_column_names.py   # one-time: rename player_absences GAME_DATE/PLAYER_NAME → DATE/PLAYER
+│   ├── patch_fantasy_id_types.py       # one-time: cast fantasy_logs PLAYER_ID/GAME_ID → INTEGER
+│   ├── drive_ingestion.py              # download latest .xlsx from Google Drive
+│   ├── auth_manager.py                 # 3-legged Google OAuth helper
+│   ├── config.py                       # download dir, Drive job defs, email settings (loads .env)
+│   ├── paths.py                        # resolve_base_data_path() — single path-resolution helper
+│   ├── mappings.py                     # PLAYER_NAME_MAP (variant → canonical name)
+│   ├── seasons.py                      # SLATE_SEASONS / L30_SEASON / PLAYOFFS_SEASON constants
+│   ├── dk_matching.py                  # shared DraftKings load + fuzzy-match helper (used by all exports)
+│   ├── seed_map_teams.py               # create + populate the map_teams table
+│   ├── create_summary_tables.py        # build fantasy_averages + player-average views
+│   ├── export_slate_averages_vw.py     # build vw_daily_slate / vw_daily_slate_l30
+│   ├── export_playoffs_slate_averages_vw.py  # build vw_daily_slate_playoffs
+│   ├── export_slate_averages_csv.py    # export slate averages to timestamped CSV
+│   ├── email_notifier.py               # SMTP success/error notification
+│   ├── check_ingest_duplicates.py      # report/remove duplicate (PLAYER_ID, DATE) rows
+│   ├── create_log_indexes.py           # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
+│   ├── run_db_patch.py                 # one-time retroactive player-name fix
+│   └── verify_db_patch.py              # verify the name patch
+├── pyproject.toml                  # packaging manifest (setuptools, src layout)
 ├── requirements.txt / requirements-dev.txt
-├── pytest.ini
+├── pytest.ini                      # pythonpath = src
 ├── CLAUDE.md                       # primary project guidance
 ├── tests/                          # pytest suite
 │   ├── __init__.py
@@ -46,7 +50,7 @@ bigdataball-data/
 
 ## Entry Points
 
-All scripts are runnable directly (`python <script>.py`) and importable. There is **no** `main.py`, console-script, or manifest `scripts` entry — the scan reports "No common entry points found".
+All modules are importable from the `bigdataball` package and runnable via `python -m bigdataball.<module>` (direct `python src/bigdataball/<module>.py` execution no longer works — the package-relative imports require the `-m` form). There is **no** `main.py` or `[project.scripts]` console-script entry — console scripts were deliberately deferred (`daily_player_upload.main()` returns a tuple, which would corrupt a console-wrapper exit code).
 
 | Entry point | Role |
 |-------------|------|
@@ -70,7 +74,7 @@ All scripts are runnable directly (`python <script>.py`) and importable. There i
 - **`paths.py`** — `resolve_base_data_path()`, the single source of truth for the DB base path (`BIGDATABALL_DATA_DIR` env → `G:` mount → local `Data/`). Every DB-touching script imports it (plan 005).
 - **`mappings.py`** — `PLAYER_NAME_MAP` dict, the single source of truth for name standardization.
 - **`CLAUDE.md`** — the most authoritative human-written description of architecture and conventions (more current than the README/setup guide).
-- **`plans/README.md`** — index of the fourteen improve-skill plans with execution status (001–008, 010, 012, 013 DONE; 009/011/014 open — see the table there for the live state).
+- **`plans/README.md`** — index of the fourteen improve-skill plans with execution status (all 001–014 now DONE — see the table there for the live state).
 
 ## Data Directories (under the resolved base path, git-ignored)
 
@@ -86,6 +90,6 @@ All scripts are runnable directly (`python <script>.py`) and importable. There i
 - `daily_player_upload.py:74-302` (`main()` returns `(processed, overwritten, absences_count)`)
 - `config.py:1-36`, `paths.py` (`resolve_base_data_path`)
 - `mappings.py:5-17`
-- `plans/README.md` (plan status table — 001–008/010/012/013 DONE, 009/011/014 open)
+- `plans/README.md` (plan status table — all 001–014 DONE)
 - `tests/` directory (conftest, helpers, nine `test_*.py` modules — 56 tests)
 - `.gitignore:19-31` (`*.db`, `*.sql` ignored)

@@ -3,7 +3,7 @@
 ## Framework & How to Run
 
 - **pytest** (`>=7.4`, `requirements-dev.txt` — separate from runtime deps).
-- Config: `pytest.ini` → `pythonpath = .` (so root modules import under a bare `pytest`), `testpaths = tests`.
+- Config: `pytest.ini` → `pythonpath = src` (so modules import under the `bigdataball` package), `testpaths = tests`.
 - Verified current state: **`python -m pytest -q` → 56 passed in ~9s** (run 2026-07-23).
 
 ```bash

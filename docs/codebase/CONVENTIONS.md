@@ -20,8 +20,8 @@ These are observed from the code, not enforced by any linter (none is configured
 ## Imports
 
 - Stdlib, then third-party, then local — generally but not strictly grouped.
-- Local modules imported **bare** (`import config`, `import mappings`, `import drive_ingestion`) — this is why `pytest.ini` sets `pythonpath = .`. The planned `src/` refactor (plan 009) would convert these to package-relative imports.
-- No `__init__.py` at the root (flat layout); `tests/__init__.py` exists so `from tests.helpers import ...` works.
+- Local modules imported **package-relative** (`from . import config`, `from . import mappings`, `from .auth_manager import ...`) inside the `src/bigdataball/` package — this is why `pytest.ini` sets `pythonpath = src`. This is the result of the plan 009 src-layout refactor (DONE); the module-reference names at call sites are unchanged, only the import lines.
+- `src/bigdataball/__init__.py` marks the package; `tests/__init__.py` exists so `from tests.helpers import ...` works.
 
 ## Path Resolution (the central cross-cutting convention)
 
