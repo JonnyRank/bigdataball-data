@@ -29,14 +29,20 @@ re-discovering the repo each time" and points every agent and new contributor at
 `docs/codebase/`. Two of those files now assert things that are **false**, and
 they're the two an executor is most likely to trust without checking:
 
-- `STACK.md` says CI pins **Python 3.11** and that no `python_requires` floor is
-  declared. CI has run **3.13** since the plan-009 src-layout merge, and
-  `pyproject.toml` declares `requires-python = ">=3.11"`.
+- **Both files** say CI pins **Python 3.11** (`STACK.md:5,49` and `TESTING.md:16`).
+  CI has run **3.13** since the plan-009 src-layout merge. `STACK.md` additionally
+  claims no `python_requires` floor is declared; `pyproject.toml:9` declares
+  `requires-python = ">=3.11"`.
 - `TESTING.md`'s test inventory is missing **two whole test modules**
   (`test_create_summary_tables.py`, `test_patch_fantasy_id_types.py`), undercounts
-  a third by 4 tests, and lists `create_summary_tables.py` as untested with
+  a third by 4 tests, still calls the set "nine modules" in its Evidence list when
+  there are eleven, and lists `create_summary_tables.py` as untested with
   "(plan 011, TODO)" — plan 011 is **DONE** and those tests have existed since
   2026-07-23.
+
+Fixing only one of the two files would be worse than fixing neither in one respect:
+`STACK.md` would then say 3.13 while `TESTING.md` said 3.11, and a reader has no
+way to tell which is current. Both go in the same change.
 
 The concrete cost: an agent reading `TESTING.md` concludes `create_summary_tables.py`
 has no coverage and either writes duplicate tests or treats a refactor there as
@@ -52,25 +58,25 @@ This is a docs-only change. No source code, no tests, no behavior.
 
 Line 5 (the `## Language & Runtime` section), verbatim:
 
-```
+```text
 - **Language:** Python. Local development uses **3.13.3** (the git-ignored `venv/`); CI pins **3.11** (`.github/workflows/test.yml:18`). No `python_requires` is declared in-repo, so there is no enforced floor — code must remain compatible across 3.11–3.13.
 ```
 
 Line 6, verbatim:
 
-```
+```text
 - **Platform:** Primary development/runtime environment is Windows 11 (paths like `G:\My Drive\...` are hardcoded; see `config.py:7`). CI runs on `ubuntu-latest` (`.github/workflows/test.yml:10`).
 ```
 
 Line 49 (in the `## Evidence` list), verbatim:
 
-```
+```text
 - `.github/workflows/test.yml` (Python 3.11, ubuntu-latest, install + pytest)
 ```
 
 Line 53 (also `## Evidence`), verbatim:
 
-```
+```text
 - `pyproject.toml` (setuptools src-layout manifest; no `[tool.ruff]` or runtime deps declared)
 ```
 
@@ -122,9 +128,42 @@ declared. The "no `[tool.ruff]` section" half of line 53 is still accurate today
 
 ### File 2 — `docs/codebase/TESTING.md`
 
+Line 16 (the last bullet of `## Framework & How to Run`), verbatim — it repeats
+`STACK.md`'s false Python-version claim, and its `runs on every push/PR` half is
+accurate:
+
+```text
+- **CI:** `.github/workflows/test.yml` runs `python -m pytest -q` on every push to `main` and every PR (ubuntu-latest, Python 3.11).
+```
+
+Lines 68 and 70 (in `## Evidence`), verbatim:
+
+```text
+- `tests/test_*.py` — nine modules (per-file counts above)
+```
+
+```text
+- `.github/workflows/test.yml:25-26`
+```
+
+There are **eleven** test modules, not nine. And `test.yml:25-26` are the two `pip
+install` lines inside the "Install dependencies" step — the pytest invocation this
+bullet is offered as evidence for is at **`test.yml:29-30`**:
+
+```yaml
+      - name: Install dependencies   # line 23
+        run: |                        # line 24
+          python -m pip install --upgrade pip                      # line 25
+          pip install -r requirements.txt -r requirements-dev.txt  # line 26
+          pip install -e .                                         # line 27
+                                                                   # line 28
+      - name: Run tests               # line 29
+        run: python -m pytest -q      # line 30
+```
+
 The `## Organization` tree, lines 20–34, verbatim:
 
-```
+```text
 tests/
 ├── __init__.py                       # makes `from tests.helpers import ...` work
 ├── conftest.py                       # `player_upload` fixture
@@ -144,19 +183,19 @@ Those counts sum to **56**. The suite is **68**.
 
 Line 39, verbatim:
 
-```
+```text
 - **`test_daily_fantasy_log_upload.py`** (6): single-file fantasy-log load + player learning, name standardization, `DRAFTKINGS1` column drop/rename, ISO date handling (plan 010). Uses a module-scoped `autouse` fixture that no-ops `email_notifier.send_email_alert` so `main()`-driving tests don't attempt a real SMTP send.
 ```
 
 Line 58 (in `## Gaps / Not Covered`), verbatim:
 
-```
+```text
 - **No tests** for `create_summary_tables.py` (plan 011, TODO), the view-building bodies of the three `export_*` scripts (their DK-matching helper *is* tested via `test_dk_matching.py`), `drive_ingestion.py`/`auth_manager.py` (Google Drive), `email_notifier.py`, or `run_db_patch.py`/`verify_db_patch.py`.
 ```
 
 Line 61, verbatim:
 
-```
+```text
 - **Broadening coverage to the summary/export scripts stays a near-term goal** (plan 011). The `player_upload` env-seam fixture pattern (fresh import under `BIGDATABALL_DATA_DIR`, dispose engine on teardown) is the template to extend; the summary/export scripts additionally need a seeded `map_teams` table (now easy via `seed_map_teams.py`) and the player-average views in place.
 ```
 
@@ -181,7 +220,7 @@ Line 61, verbatim:
 The test names in the three affected modules (use these to write accurate
 descriptions — do not invent coverage claims):
 
-```
+```text
 test_daily_fantasy_log_upload.py::test_dedup_across_files_in_one_run
 test_daily_fantasy_log_upload.py::test_unique_index_exists_on_fantasy_logs
 test_daily_fantasy_log_upload.py::test_single_file_loads_logs_and_learns_players
@@ -233,7 +272,9 @@ and the 4 extra fantasy-upload tests) is **DONE**; plan **019** (tests for the t
 | CI Python version | `grep -n "python-version" .github/workflows/test.yml` | `21:          python-version: "3.13"` |
 | Declared floor | `grep -n "requires-python" pyproject.toml` | `9:requires-python = ">=3.11"` |
 | No stale 3.11 CI claim remains | `grep -n "CI pins\|Python 3.11, ubuntu" docs/codebase/STACK.md` | no matches |
+| No stale 3.11 claim in TESTING either | `grep -n "Python 3.11" docs/codebase/TESTING.md` | no matches |
 | No stale plan-011 TODO remains | `grep -n "plan 011, TODO" docs/codebase/TESTING.md` | no matches |
+| Test-module count in Evidence | `grep -n "modules (per-file counts above)" docs/codebase/TESTING.md` | says `eleven`, not `nine` |
 
 If a repo-local `.venv` exists, use `.venv/bin/python -m pytest ...` instead of
 `python -m pytest ...`.
@@ -242,8 +283,9 @@ If a repo-local `.venv` exists, use `.venv/bin/python -m pytest ...` instead of
 
 **In scope** (the only files you should modify):
 - `docs/codebase/STACK.md` (lines 5, 6, 49, 53 only)
-- `docs/codebase/TESTING.md` (the `## Organization` tree, the `## What Is Covered`
-  list, and lines 58 and 61 of `## Gaps / Not Covered`)
+- `docs/codebase/TESTING.md` (line 16 of `## Framework & How to Run`; the
+  `## Organization` tree; the `## What Is Covered` list; lines 58 and 61 of
+  `## Gaps / Not Covered`; lines 68 and 70 of `## Evidence`)
 - `plans/README.md` (status row update only)
 
 **Out of scope** (do NOT touch, even though they look related):
@@ -295,8 +337,15 @@ succeeds, apply these three adjustments and otherwise follow the plan unchanged:
    `test_create_summary_tables.py` one, describing the 4 tests you can read in the
    file (do not copy this description blindly — open the file):
    `- **`test_run_db_patch.py`** (4): happy-path rename + commit, missing tables skipped, an unexpected `OperationalError` still closes the connection, and an aborted run commits nothing (plan 022).`
-3. **Step 5, line 58** — also drop `run_db_patch.py` from the "No tests" list,
+3. **Step 5d, line 58** — also drop `run_db_patch.py` from the "No tests" list,
    leaving `verify_db_patch.py` there on its own.
+4. **Step 5b, line 68** — write `twelve modules`, not `eleven`.
+5. **The three suite-total mentions elsewhere in `TESTING.md`** — line 7
+   (`**\`python -m pytest -q\` → 68 passed** (run 2026-07-24)`), line 11
+   (`# full suite (68 tests)`), and line 71 (`Local run: ... → \`68 passed\``) — all
+   become `72`. Update the parenthetical dates on lines 7 and 71 to the date you
+   run it. **If plan 022 has *not* landed, leave all three exactly as they are** —
+   68 is correct and they are out of scope.
 
 Everywhere this plan says `68 passed`, read `72 passed`; everywhere it says the
 tree sums to `68`, read `72`; everywhere it says `10` coverage bullets, read `11`.
@@ -307,10 +356,10 @@ this section entirely.
 
 ### Step 0: Re-verify every corrected value before editing
 
-Run all six verification commands in the "Commands you will need" table. Every one
-must produce the stated expected output.
+Run **every** verification command in the "Commands you will need" table above —
+all of them, not a sample. Each must produce the stated expected output.
 
-**Verify**: all six commands match. If the per-file counts differ from the table in
+**Verify**: every command in that table matches. If the per-file counts differ from the table in
 "Current state" **for any reason other than plan 022's `test_run_db_patch.py`**, the
 suite changed since this plan was written — STOP and report the actual counts rather
 than writing the ones in this plan. Write the counts you measured here, never the
@@ -320,14 +369,14 @@ ones transcribed from this file.
 
 Replace **line 5** with:
 
-```
+```text
 - **Language:** Python. Local development uses **3.13.3** (the git-ignored `venv/`); CI pins **3.13** (`.github/workflows/test.yml:21`). `pyproject.toml` declares `requires-python = ">=3.11"` (`pyproject.toml:9`), so 3.11 is the enforced floor — code must remain compatible across 3.11–3.13.
 ```
 
 Replace **line 6** with the same text but the CI anchor corrected from `:10` to
 `:13`:
 
-```
+```text
 - **Platform:** Primary development/runtime environment is Windows 11 (paths like `G:\My Drive\...` are hardcoded; see `config.py:7`). CI runs on `ubuntu-latest` (`.github/workflows/test.yml:13`).
 ```
 
@@ -343,13 +392,13 @@ Replace **line 6** with the same text but the CI anchor corrected from `:10` to
 
 Replace **line 49** with:
 
-```
+```text
 - `.github/workflows/test.yml` (Python 3.13, ubuntu-latest, `pip install -r requirements.txt -r requirements-dev.txt` + `pip install -e .` + pytest)
 ```
 
 Replace **line 53** with:
 
-```
+```text
 - `pyproject.toml` (setuptools src-layout manifest; `requires-python = ">=3.11"`, no `[tool.ruff]` section, no runtime deps declared)
 ```
 
@@ -362,7 +411,7 @@ descending test count to match the existing convention, with counts that sum to 
 Keep the `├──`/`└──` characters correct (last row uses `└──`) and keep the column
 alignment of the `#` comments:
 
-```
+```text
 ├── test_absence_ingestion.py         # 11 — DNP-DND-NWT sheet → player_absences
 ├── test_daily_fantasy_log_upload.py  # 10 — fantasy-log ingestion (inline loop)
 ├── test_check_ingest_duplicates.py   # 10 — dedup detection/removal
@@ -388,7 +437,7 @@ they are.
 **4a.** Change the count on line 39 from `(6)` to `(10)` and extend its description
 to cover the four plan-014 tests. Replacement for line 39:
 
-```
+```text
 - **`test_daily_fantasy_log_upload.py`** (10): single-file fantasy-log load + player learning, name standardization, `DRAFTKINGS1` column drop/rename, ISO date handling (plan 010); cross-file dedup in one run (plan 003) and the UNIQUE-index backstop (plan 012); and INTEGER `PLAYER_ID` storage, no-duplicate re-runs after the int cast, fractional-ID rejection, and the missing-ID drop being counted and surfaced in the email (plan 014). Uses a module-scoped `autouse` fixture that no-ops `email_notifier.send_email_alert` so `main()`-driving tests don't attempt a real SMTP send.
 ```
 
@@ -398,11 +447,11 @@ bullet immediately **after** the `test_dk_matching.py` bullet (line 42), and the
 `test_patch_fantasy_id_types.py` bullet immediately **after** the
 `test_seed_map_teams.py` bullet (line 43):
 
-```
+```text
 - **`test_create_summary_tables.py`** (5): the missing-tables guard returns `False`; basic aggregation builds `fantasy_averages` (GP/FPPG/SEASON/TEAM/canonical PLAYER); Regular-vs-Playoffs `SEASON_TYPE` + `SEASON_KEY` formatting; the L30FPPM 30-day window vs. all-games FPPM; and `run_summary_pipeline` view creation (plan 011).
 ```
 
-```
+```text
 - **`test_patch_fantasy_id_types.py`** (3): the one-time `fantasy_logs` ID migration flips column affinity to INTEGER while preserving data and re-creating the UNIQUE index, is idempotent (second run skips the backup), and rejects fractional IDs (plan 014).
 ```
 
@@ -413,23 +462,57 @@ combined bullet (line 44) — leave that combined bullet exactly as-is. Confirm 
 eye that every one of the 11 files in the Step 3 tree is named somewhere in
 `## What Is Covered`.
 
-### Step 5: Fix the two stale claims in `## Gaps / Not Covered` in `TESTING.md`
+### Step 5: Fix the remaining stale claims in `TESTING.md`
 
-Replace **line 58** with (drops `create_summary_tables.py`, which is now covered):
+This step covers the three sections outside the tree and coverage list: the CI
+bullet, `## Gaps / Not Covered`, and `## Evidence`.
 
+**5a — line 16, the CI bullet.** It repeats the same false Python version you
+corrected in `STACK.md` at Step 1. Replace it with:
+
+```text
+- **CI:** `.github/workflows/test.yml` runs `python -m pytest -q` on every push to `main` and every PR (ubuntu-latest, Python 3.13).
 ```
+
+Only `3.11` → `3.13` changes; leave the rest of the sentence alone.
+
+**5b — line 68, the module count in `## Evidence`.** Replace with:
+
+```text
+- `tests/test_*.py` — eleven modules (per-file counts above)
+```
+
+(Twelve, if plan 022 has landed — see the branch section near the top.)
+
+**5c — line 70, the stale CI anchor in `## Evidence`.** `test.yml:25-26` points at
+two `pip install` lines, not the pytest invocation this bullet is evidence for.
+Replace with:
+
+```text
+- `.github/workflows/test.yml:29-30` (the `Run tests` step)
+```
+
+**5d — line 58 in `## Gaps / Not Covered`.** Replace with (drops
+`create_summary_tables.py`, which is now covered):
+
+```text
 - **No tests** for the view-building bodies of the three `export_*` scripts (their DK-matching helper *is* tested via `test_dk_matching.py`), `drive_ingestion.py`/`auth_manager.py` (Google Drive), `email_notifier.py`, or `run_db_patch.py`/`verify_db_patch.py`.
 ```
 
-Replace **line 61** with (repoints from the DONE plan 011 to the open plan 019):
+**5e — line 61.** Replace with (repoints from the DONE plan 011 to the open plan
+019):
 
-```
+```text
 - **Broadening coverage to the export view-builders stays a near-term goal** (plan 019). `create_summary_tables.py` is now covered (plan 011, DONE). The `player_upload` env-seam fixture pattern (fresh import under `BIGDATABALL_DATA_DIR`, dispose engine on teardown) is the template to extend; the export scripts additionally need a seeded `map_teams` table (now easy via `seed_map_teams.py`) and the player-average views in place.
 ```
 
-Leave lines 57, 59, and 60 unchanged — all three are still accurate.
+Leave lines 57, 59, and 60 unchanged — all three are still accurate. Leave every
+other `## Evidence` bullet (65, 66, 67, 69, 71) alone.
 
 **Verify**:
+- `grep -n "Python 3.11" docs/codebase/TESTING.md` → no matches
+- `grep -n "nine modules" docs/codebase/TESTING.md` → no matches
+- `grep -n "test.yml:25-26" docs/codebase/TESTING.md` → no matches
 - `grep -n "plan 011, TODO" docs/codebase/TESTING.md` → no matches
 - `grep -n "plan 019" docs/codebase/TESTING.md` → one match
 
@@ -459,6 +542,9 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -c "test.yml:10" docs/codebase/STACK.md` returns `0`
 - [ ] `grep -c "test.yml:21" docs/codebase/STACK.md` returns `1`
 - [ ] `grep -c "requires-python" docs/codebase/STACK.md` returns `2`
+- [ ] `grep -c "Python 3.11" docs/codebase/TESTING.md` returns `0`
+- [ ] `grep -c "nine modules" docs/codebase/TESTING.md` returns `0`
+- [ ] `grep -c "test.yml:25-26" docs/codebase/TESTING.md` returns `0`
 - [ ] `grep -c "plan 011, TODO" docs/codebase/TESTING.md` returns `0`
 - [ ] `grep -c "test_create_summary_tables.py" docs/codebase/TESTING.md` returns `2`
       (one tree row, one coverage bullet)

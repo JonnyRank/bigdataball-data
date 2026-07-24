@@ -476,11 +476,17 @@ def test_failed_run_commits_nothing(patch_module):
 
 ### Step 5: Confirm nothing outside scope changed
 
-**Verify**: `git status --porcelain` → exactly these entries and nothing else:
-- ` M src/bigdataball/run_db_patch.py`
-- `?? tests/test_run_db_patch.py`
-- ` M plans/README.md` (only if you are updating the index — skip if a reviewer
-  told you they maintain it)
+**Verify**: `git status --porcelain` → exactly these entries and nothing else
+(note the leading space in the ` M` status codes):
+
+```text
+ M src/bigdataball/run_db_patch.py
+?? tests/test_run_db_patch.py
+ M plans/README.md
+```
+
+The third line appears only if you are updating the index — skip it if a reviewer
+told you they maintain it.
 
 ## Test plan
 
@@ -512,8 +518,13 @@ Machine-checkable. ALL must hold:
 - [ ] `grep -c "conn.rollback()" src/bigdataball/run_db_patch.py` returns `1`
 - [ ] `python -m pytest -q tests/test_run_db_patch.py` → `4 passed`
 - [ ] `python -m pytest -q` → `72 passed`
-- [ ] `git diff --stat` shows changes to `src/bigdataball/run_db_patch.py` only
-      (plus the new untracked test file and, optionally, `plans/README.md`)
+- [ ] `test -f tests/test_run_db_patch.py; echo $?` returns `0` (the new file
+      exists — `git diff` cannot show it, since it is untracked)
+- [ ] `git status --porcelain` lists only the three entries from Step 5 — this,
+      not `git diff --stat`, is the scope check, because `git diff` is blind to
+      untracked files
+- [ ] `git diff --stat` (tracked files only) shows
+      `src/bigdataball/run_db_patch.py` and, optionally, `plans/README.md`
 - [ ] `git diff src/bigdataball/run_db_patch.py` contains **no** change to any
       SQL string, print string, or the `tables_to_patch` dict — only indentation,
       the `try:`/`finally:` lines, the `conn.rollback()` line, and its comment

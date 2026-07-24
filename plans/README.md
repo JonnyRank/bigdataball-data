@@ -24,8 +24,10 @@ plan file and this index both showed "—"; now recorded in both. (2) Open issue
 [`#53`](https://github.com/JonnyRank/bigdataball-data/issues/53) (`run_db_patch.py`
 connection cleanup, filed by the maintainer from the PR #52 review) had **no plan** —
 the finding was re-verified in the live code and is now **plan 022**. All other
-`improve`-labeled issues reconcile cleanly: the seven open ones map 1:1 to the seven
-open plans, and every issue for a DONE plan (#4–#11, #28–#30, #32, #42) is closed.
+`improve`-labeled issues reconcile cleanly: the seven **pre-existing** open issues map
+1:1 to plans **015–021**, and every issue for a DONE plan (#4–#11, #28–#30, #32, #42)
+is closed. This reconcile then adds plans **022** (tracked by the already-open #53)
+and **023** (new issue #66), so the table below carries **nine** TODO plans, not seven.
 
 *Docs.* Two `docs/codebase/` files carry confirmed factual drift and are now
 **plan 023**: `STACK.md` claims CI pins Python 3.11 (it runs 3.13) and that no
