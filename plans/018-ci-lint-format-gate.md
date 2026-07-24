@@ -39,10 +39,11 @@
   is empty, and the finding still holds (`grep -rn -i ruff` over those three files
   returns nothing). Excerpts and line anchors below are current. Note for the
   executor: this plan updates `docs/codebase/STACK.md`'s "Linting / Formatting"
-  section; **plan 023** separately corrects that file's stale Python-version facts
-  and deliberately leaves the Ruff lines to you. If 023 has already landed, expect
-  `STACK.md` lines 5/6/49/53 to read differently than any excerpt here — that is
-  023's change, not drift.
+  section only. That file has separate, unrelated staleness elsewhere (the CI
+  Python version and the `requires-python` floor), which the `codebase-doc-refresh`
+  skill owns — if a refresh has run since this plan was written, `STACK.md` lines
+  5/6/49/53 may read differently than any excerpt here. That is the refresh, not
+  drift; leave those lines alone and change only the Ruff ones.
 
 ## Why this matters
 

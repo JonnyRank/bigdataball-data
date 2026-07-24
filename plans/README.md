@@ -26,15 +26,15 @@ connection cleanup, filed by the maintainer from the PR #52 review) had **no pla
 the finding was re-verified in the live code and is now **plan 022**. All other
 `improve`-labeled issues reconcile cleanly: the seven **pre-existing** open issues map
 1:1 to plans **015–021**, and every issue for a DONE plan (#4–#11, #28–#30, #32, #42)
-is closed. This reconcile then adds plans **022** (tracked by the already-open #53)
-and **023** (new issue #66), so the table below carries **nine** TODO plans, not seven.
+is closed. This reconcile then adds plan **022** (tracked by the already-open #53),
+so the table below carries **eight** TODO plans.
 
-*Docs.* Two `docs/codebase/` files carry confirmed factual drift and are now
-**plan 023**: `STACK.md` claims CI pins Python 3.11 (it runs 3.13) and that no
-`requires-python` floor is declared (`pyproject.toml:9` declares `>=3.11`);
-`TESTING.md`'s inventory omits two whole test modules, undercounts a third by 4, and
-still calls plan 011 "TODO". The advisor is read-only outside `plans/`, so the
-corrections are specified as a plan rather than applied here.
+*Docs.* Two `docs/codebase/` files carry confirmed factual drift — `STACK.md` on the
+CI Python version and the `requires-python` floor, `TESTING.md` on its test inventory
+and a DONE plan still labelled TODO. **Recorded under "considered and rejected", not
+planned**: routine `docs/codebase/` refreshes belong to the `codebase-doc-refresh`
+skill, not to an `improve` plan. Details are in that section below so the next
+reconcile doesn't re-raise them.
 
 **Deep audit 2026-07-24 against commit `aef8efa`** (plan 009 src-layout merge, `HEAD`).
 With all of 001–014 DONE, a fresh `deep` pass read all 24 `.py` files under
@@ -124,7 +124,6 @@ Each plan is self-contained — an executor needs only the plan file and the rep
 | 020  | Split the pipeline orchestrator out of `daily_fantasy_log_upload.py` | P2 | M | none | TODO (user-requested `plan` 2026-07-24 @ `8c8bfc4`; reconciled 2026-07-24 @ `ba82f6a` — no drift; **issue link recovered**, was shown as "—") | [#62](https://github.com/JonnyRank/bigdataball-data/issues/62) |
 | 021  | pre-commit Ruff hook + cloud session auto-enroll | P3 | S–M | **018** | TODO (user-requested `plan` 2026-07-24 @ `91fa6a0`; reconciled 2026-07-24 @ `ba82f6a` — no drift; blocked until 018 lands) | [#64](https://github.com/JonnyRank/bigdataball-data/issues/64) |
 | 022  | Close the SQLite connection on every exit path in `run_db_patch.py` | P3 | S | none | TODO (reconcile 2026-07-24 @ `ba82f6a` — written for pre-existing issue #53, which had no plan) | [#53](https://github.com/JonnyRank/bigdataball-data/issues/53) |
-| 023  | Correct stale facts in `docs/codebase/STACK.md` + `TESTING.md` | P3 | S | none | TODO (reconcile 2026-07-24 @ `ba82f6a` — doc drift confirmed against live code) | [#66](https://github.com/JonnyRank/bigdataball-data/issues/66) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -176,15 +175,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   **015 → 016** (the two robustness bug fixes) → **017 → 018** (cheap DX wins) → **019**
   (the coverage expansion). 019 is tests-only and touches no `src/` code; 017 touches no
   code at all.
-- **022 and 023 (reconcile 2026-07-24) are independent of everything else** and of
-  each other. 022 touches only `src/bigdataball/run_db_patch.py` + a new
-  `tests/test_run_db_patch.py`; 023 touches only two files under `docs/codebase/`.
-  Neither blocks nor is blocked by 015–021. One soft coupling to know about: **023
-  must not edit `STACK.md`'s "Linting / Formatting" section** — that's plan 018's,
-  and both plans now say so explicitly, so 018 and 023 can land in either order.
-  A second: 022 adds a test file, which makes `TESTING.md`'s inventory (the thing
-  023 fixes) one row stale again — so prefer **022 → 023**, or have whoever lands
-  022 update the one tree row in the same PR.
+- **022 (reconcile 2026-07-24) is independent of everything else.** It touches only
+  `src/bigdataball/run_db_patch.py` plus a new `tests/test_run_db_patch.py`, and
+  neither blocks nor is blocked by 015–021. One knock-on to note: it adds a test
+  file, so `docs/codebase/TESTING.md`'s inventory goes one row stale when it lands —
+  refresh the docs afterwards with the `codebase-doc-refresh` skill.
 - **021 (pre-commit Ruff) hard-depends on 018 (CI Ruff gate).** 021 reuses the
   `[tool.ruff]` config and the pinned `ruff==` version that 018 adds to
   `pyproject.toml`/`requirements-dev.txt`; without 018 the pre-commit hooks would run
@@ -243,15 +238,17 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   integer IDs (unlike the DFS feed that motivated plan 014), so this asymmetry may never
   trigger. Promote to a plan only if an `IntegrityError` on `player_logs` is actually
   observed. (LOW confidence on whether it can fire; the fix, if needed, mirrors plan 014.)
-- ~~**Doc drift: `STACK.md` says CI pins Python 3.11**~~ — **promoted to plan 023 at the
-  2026-07-24 reconcile.** The nit turned out not to be one line: `STACK.md` is wrong on
-  four lines (CI Python version, the `test.yml` anchors, and the "no `python_requires`
-  floor" claim, which `pyproject.toml:9` contradicts), and `TESTING.md` is worse —
-  its inventory omits `test_create_summary_tables.py` and `test_patch_fantasy_id_types.py`
-  entirely, undercounts `test_daily_fantasy_log_upload.py` by 4, and still labels plan
-  011 "TODO" when it's DONE. That last one actively misleads (an agent concludes
-  `create_summary_tables.py` is untested), which is what tipped it from fold-in to plan.
-  Plan 018 still owns the STACK.md "Linting / Formatting" note; 023 leaves it alone.
+- **Doc drift in `docs/codebase/`** — confirmed and larger than the original one-line
+  nit at the 2026-07-24 reconcile: `STACK.md` is stale on four lines (CI Python
+  version, two `test.yml` anchors, and the "no `python_requires` floor" claim, which
+  `pyproject.toml:9` contradicts), and `TESTING.md` on six (inventory omits
+  `test_create_summary_tables.py` and `test_patch_fantasy_id_types.py`, undercounts
+  `test_daily_fantasy_log_upload.py` by 4, says "nine modules" when there are eleven,
+  cites `test.yml:25-26` for the pytest run that lives at `:29-30`, and labels plan 011
+  "TODO" when it's DONE). **Not planned — out of scope for `improve`.** Routine
+  `docs/codebase/` refreshes are handled by the `codebase-doc-refresh` skill; run that
+  rather than carrying a plan for it. Plan 018 still owns the `STACK.md`
+  "Linting / Formatting" note as part of its own change.
 
 ## Findings considered and rejected (reconcile 2026-07-24)
 
@@ -266,8 +263,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   `email_notifier.py:1-2`, `check_ingest_duplicates.py:72-76`) rather than the
   post-plan-009 path `src/bigdataball/…`. Deferred, not planned: every one of those
   names is unique in the repo, so the anchors still resolve; it's a cosmetic sweep
-  across five doc files, best done in one dedicated pass than smuggled into plan 023's
-  correctness fix (023 says so in its out-of-scope list).
+  across five doc files, and like the drift above it belongs to the
+  `codebase-doc-refresh` skill rather than a plan.
 - **`player_logs` dedup asymmetry** (from the deep audit above) — re-checked at this
   reconcile and still LOW-confidence investigate-only; `daily_player_upload.py` is
   unchanged since `aef8efa`. Promote only if an `IntegrityError` on `player_logs` is
