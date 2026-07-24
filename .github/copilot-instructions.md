@@ -99,7 +99,7 @@ pip install -e .   # install the bigdataball package so `python -m bigdataball.*
 ```
 
 > **Note:** The `requirements.txt` file may contain encoding artifacts (null bytes between characters). If `pip install` fails with a parsing error, re-save the file with standard UTF-8 encoding before retrying.
-
+>
 > **Note:** With the `src/bigdataball/` layout, the `python -m bigdataball.<module>` commands below require the package to be importable — run `pip install -e .` (as above) or set `PYTHONPATH=src` first.
 
 ## How to Run
