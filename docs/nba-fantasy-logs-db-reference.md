@@ -31,10 +31,19 @@ in full below.
 | 5 | `map_teams` is now created/populated by `seed_map_teams.py` | 008 | It exists reliably now, with a documented raw-name format ("Golden State", "LA Clippers" — city-only, no nickname). |
 | 6 | Season filters centralized in `seasons.py`; source layout moved to `src/bigdataball/` | 007, 009 | If you planned to import anything from the pipeline repo, imports are now `from bigdataball.<mod> import ...` and require `pip install -e .` or `PYTHONPATH=src`. |
 
-**The single most important consequence:** `PLAYER_ID` is an **INTEGER** everywhere —
-`fantasy_logs`, `player_logs`, `player_absences`, `dim_players`, `fantasy_averages`.
-Join on it directly. `GAME_ID` is INTEGER and **unpadded** (e.g. `22500001`); do not
-zero-pad, do not treat it as TEXT.
+**The single most important consequence:** `PLAYER_ID` holds **integer values**
+everywhere — `fantasy_logs`, `player_logs`, `player_absences`, `dim_players`,
+`fantasy_averages`. Join on it directly. `GAME_ID` is integer-valued and **unpadded**
+(e.g. `22500001`); do not zero-pad, do not treat it as TEXT.
+
+Note the distinction between *stored values* and *declared column types*: only
+`fantasy_logs` (plan 014) and `dim_players` (explicit DDL) declare `INTEGER`.
+`player_logs` and `player_absences` were created implicitly by pandas, so their ID
+columns carry whatever affinity pandas inferred (`BIGINT`) — the values are integers
+because the feeds deliver clean integer IDs, not because anything enforces it. In
+SQLite this rarely matters, since affinity governs coercion rather than the stored
+class, but it does mean `PRAGMA table_info` and `typeof()` will disagree in wording.
+Check with `typeof()` (query 2 in §2), not the declared type.
 
 ---
 
@@ -60,8 +69,16 @@ PRAGMA table_info(map_teams);
 SELECT DISTINCT typeof(PLAYER_ID), typeof(GAME_ID) FROM fantasy_logs;
 SELECT DISTINCT typeof(PLAYER_ID), typeof(GAME_ID) FROM player_logs;
 SELECT DISTINCT typeof(PLAYER_ID), typeof(GAME_ID) FROM player_absences;
--- Expect 'integer' everywhere. Any 'real' means plan 014 has not been applied
--- to this copy of the DB -> run: python -m bigdataball.patch_fantasy_id_types
+-- Expect 'integer' everywhere.
+--   fantasy_logs reporting 'real'  -> plan 014 has not been applied to this copy
+--                                     of the DB; fix with:
+--                                     python -m bigdataball.patch_fantasy_id_types
+--   player_logs / player_absences reporting 'real' -> NOT fixable by that script
+--                                     (it rewrites fantasy_logs only). This would be
+--                                     a new, unexplained condition -- investigate the
+--                                     source feed before building on those tables,
+--                                     and CAST(... AS INTEGER) on that side of any
+--                                     cross-table join in the meantime. See §8.6.
 
 -- 3. The UNIQUE indexes (plan 012)
 PRAGMA index_list(fantasy_logs);
@@ -133,12 +150,34 @@ conn.execute("ATTACH DATABASE ? AS bdb", (f"file:{src}?mode=ro",))
 Pass `uri=True` on the main connection. Whether SQLite honours a `file:` URI inside
 `ATTACH` depends on the build (`SQLITE_USE_URI`) *or* on the main connection having
 been opened with the URI flag — it happens to work either way on the SQLite 3.45
-bundled with current CPython, but the flag is the portable guarantee. **Assert that
-`mode=ro` actually took effect** rather than trusting the string: attempt a write
-against `bdb` at startup and require it to raise
-`sqlite3.OperationalError: attempt to write a readonly database`. A URI that was
-silently treated as a literal filename would otherwise give you a writable handle to
-the maintainer's production DB.
+bundled with current CPython, but the flag is the portable guarantee.
+
+**Assert that `mode=ro` actually took effect** rather than trusting the string — a URI
+silently treated as a literal filename gives you a *writable* handle to the
+maintainer's production DB. Probe with a write, but run it inside a savepoint and roll
+back unconditionally, so that the check itself cannot leave a mark in the failure case
+it exists to detect:
+
+```python
+def assert_attached_readonly(conn, schema="bdb"):
+    conn.execute(f"SAVEPOINT ro_probe")
+    try:
+        conn.execute(f"CREATE TABLE {schema}.__ro_probe__(x)")
+    except sqlite3.OperationalError:
+        return                                   # expected: readonly database
+    finally:
+        conn.execute("ROLLBACK TO ro_probe")     # unconditional
+        conn.execute("RELEASE ro_probe")
+    raise RuntimeError(
+        f"{schema} attached WRITABLE - the mode=ro URI did not take effect. Refusing "
+        "to continue: this handle can modify the source database."
+    )
+```
+
+The `finally` runs on both paths, so the probe table never survives even when the
+write unexpectedly succeeds. Verified on SQLite 3.45.1: the read-only case raises
+`attempt to write a readonly database`, and the writable case leaves `sqlite_master`
+unchanged after the rollback.
 
 If you use SQLAlchemy for the main connection, run the `ATTACH` as raw SQL on the
 DBAPI connection — and re-issue it on every new connection, since `ATTACH` is
@@ -330,8 +369,12 @@ file's absence sheet was ingested before the corresponding box scores landed, an
 overlap can survive. **Verify, and treat `player_logs` as authoritative on conflict:**
 
 ```sql
+-- Usually 0, but a nonzero count is legitimate for historical rows (see above).
+-- It is a data-quality signal to inspect, not a failure: when a (PLAYER_ID, DATE)
+-- appears in both tables, treat the player_logs box score as authoritative and
+-- ignore the absence row.
 SELECT COUNT(*) FROM player_absences a
-JOIN player_logs p ON a.PLAYER_ID = p.PLAYER_ID AND a.DATE = p.DATE;  -- expect 0
+JOIN player_logs p ON a.PLAYER_ID = p.PLAYER_ID AND a.DATE = p.DATE;
 ```
 
 **No season attribution.** The sheet is cumulative for the whole season and spans
