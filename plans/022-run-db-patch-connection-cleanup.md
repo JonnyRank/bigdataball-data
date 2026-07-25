@@ -476,8 +476,10 @@ def test_failed_run_commits_nothing(patch_module):
 
 ### Step 5: Confirm nothing outside scope changed
 
-**Verify**: `git status --porcelain` → these two entries, **required** (note the
-leading space in the ` M` status code):
+**Verify**: `git status --porcelain` → these two entries, **required**. Note that
+the modified-file line starts with a space: `porcelain` prints a two-character
+status where the first column is the staged state and the second the unstaged one,
+so an unstaged modification reads as a blank followed by `M`.
 
 ```text
  M src/bigdataball/run_db_patch.py
