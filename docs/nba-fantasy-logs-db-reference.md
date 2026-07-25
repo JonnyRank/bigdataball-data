@@ -116,7 +116,7 @@ environment change.
 ### 3.2 Read-only ATTACH
 
 ```sql
-ATTACH DATABASE 'file:/absolute/path/to/nba_fantasy_logs.db?mode=ro' AS bdb KEY '';
+ATTACH DATABASE 'file:/absolute/path/to/nba_fantasy_logs.db?mode=ro' AS bdb;
 ```
 
 From Python:

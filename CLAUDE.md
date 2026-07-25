@@ -44,6 +44,7 @@ python -m bigdataball.check_ingest_duplicates --remove   # back up DB, then dele
 python -m bigdataball.seed_map_teams             # create + populate map_teams (run once on a fresh DB)
 python -m bigdataball.create_log_indexes         # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
 python -m bigdataball.backfill_player_absences Data/Archived_Player_Logs/some-player-feed.xlsx [more.xlsx ...]  # one-shot: backfill player_absences from one or more archived player-feed files (paths required)
+python -m bigdataball.patch_fantasy_id_types     # one-time: cast fantasy_logs PLAYER_ID/GAME_ID FLOAT -> INTEGER
 python -m bigdataball.run_db_patch               # one-time retroactive player-name fix
 python -m bigdataball.verify_db_patch            # verify the name patch
 ```
