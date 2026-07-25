@@ -437,7 +437,7 @@ has no `STDDEV`, so you will be computing it yourself anyway.
 
 ## 6. Keys and the join model
 
-```
+```text
 dim_players (PLAYER_ID PK, PLAYER_NAME)   ← canonical name
      ▲ PLAYER_ID          ▲ PLAYER_ID           ▲ PLAYER_ID
      │                     │                     │
