@@ -6,7 +6,7 @@ Src layout — all runtime modules live under the installable `src/bigdataball/`
 
 > **Reading the file references in these docs:** a bare module name (`paths.py`, `config.py:7`) always means `src/bigdataball/<name>` — every module name is unique in the repo, so the prefix is omitted for brevity. Paths that start with `tests/`, `plans/`, `docs/`, or `.github/` are repo-root-relative as written.
 
-```
+```text
 bigdataball-data/
 ├── src/bigdataball/                # the installable package (src layout, plan 009)
 │   ├── __init__.py

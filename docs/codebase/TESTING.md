@@ -17,7 +17,7 @@ python -m pytest -q -k dedup                              # by keyword
 
 ## Organization
 
-```
+```text
 tests/
 ├── __init__.py                       # makes `from tests.helpers import ...` work
 ├── conftest.py                       # `player_upload` + `fantasy_upload` fixtures

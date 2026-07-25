@@ -8,7 +8,7 @@ A single-machine, batch NBA DFS data pipeline. There is no service, API, or long
 
 Orchestrated by `daily_fantasy_log_upload.py:main()` (`daily_fantasy_log_upload.py:69-395`), in order:
 
-```
+```text
 Google Drive (.xlsx)
    │  drive_ingestion.main()           # download latest dfs-feed + player-feed
    ▼
@@ -62,7 +62,7 @@ There are no formal layers (no domain/data/service split). Functional groupings:
 
 Tables (all three log tables carry a UNIQUE index `idx_<table>_player_date` on `("PLAYER_ID", "DATE")` as of plan 012 — no declared PK, but the index enforces the natural key): `fantasy_logs`, `player_logs`, `dim_players` (`PLAYER_ID` PK), `fantasy_averages` (rebuilt `if_exists="replace"`), `map_teams` (`RAW_TEAM_NAME` PK → `TEAM_ABBREVIATION`), and `player_absences` (detailed below).
 
-`fantasy_logs.PLAYER_ID`/`GAME_ID` are **INTEGER** as of plan 014: incoming IDs are `to_numeric(errors="raise")`-checked, null-dropped, fractional-rejected, and cast via `dtype={...: Integer()}` on `to_sql`. The dedup key is self-healing — the DB-side `PLAYER_ID` is normalized through `Int64` before the `log_key` set is built — so ingestion is correct whether or not `patch_fantasy_id_types.py` has been run on a given DB. Dropped rows are counted and surfaced in the end-of-run email.
+`fantasy_logs.PLAYER_ID`/`GAME_ID` are **INTEGER** as of plan 014: incoming IDs are `to_numeric(errors="raise")`-checked, null-dropped, fractional-rejected, and cast via `dtype={...: Integer()}` on `to_sql`. The dedup key is self-healing — the DB-side `PLAYER_ID` is normalized through `Int64` before the `log_key` set is built — so ingestion is correct whether or not `patch_fantasy_id_types.py` has been run on a given DB. Dropped rows are counted into a run-level `fantasy_rows_dropped` and surfaced in the **success** email only (`daily_fantasy_log_upload.py:435,439-444`) — the error branch at `:423-428` sends `pipeline_errors` alone, so a run that both drops rows and fails a later stage reports the failure without the drop count.
 
 `player_absences` holds one row per player per missed game, parsed from the player-feed's `DNP-DND-NWT` sheet by `absence_ingestion.py` (called from `daily_player_upload.py` and `backfill_player_absences.py`). Columns: `DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER`, `STATUS`, `REASON`, and derived `ABSENCE_TYPE` (`'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`). Conflict policy: **box score wins at ingest** — a row is skipped if `player_logs` already has a box score for the same `(PLAYER_ID, DATE)` (re-keyed from GAME_ID by plan 012).
 
