@@ -92,4 +92,6 @@ When updating project guidance, prefer editing the specific doc in `docs/codebas
 
 When working on a GitHub issue, check if the task is already described in `plans/README.md`. Update the plan status on completion.
 
+`docs/nba-fantasy-logs-db-reference.md` is the handoff doc for **external consumers** of `nba_fantasy_logs.db` (e.g. the `nba-dfs-stats-lab` repo, which reads it via a read-only URI `ATTACH`). It documents the schema, keys, and data semantics as written by this pipeline. Keep it in sync when the DB schema or ingest semantics change.
+
 `.github/` contains a `sqlite-dba` agent and `sqlite-optimization` skill for inspecting/optimizing the database. `.claude/skills/improve/` holds a codebase-audit playbook.
