@@ -95,4 +95,4 @@ All modules are importable from the `bigdataball` package and runnable via `pyth
 - `mappings.py:5-17`
 - `plans/README.md` (plan status table — 001–014 DONE, 015–022 TODO)
 - `tests/` directory (conftest, helpers, eleven `test_*.py` modules — 68 tests)
-- `.gitignore:20-30` (`*.db`, `*.sql` ignored; `*.egg-info/` added at `:26`)
+- `.gitignore:21` (`*.db`), `:26` (`*.egg-info/`), `:30` (`*.sql`)
