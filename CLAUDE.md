@@ -44,6 +44,7 @@ python -m bigdataball.check_ingest_duplicates --remove   # back up DB, then dele
 python -m bigdataball.seed_map_teams             # create + populate map_teams (run once on a fresh DB)
 python -m bigdataball.create_log_indexes         # one-off: backfill UNIQUE (PLAYER_ID, DATE) indexes on log tables
 python -m bigdataball.backfill_player_absences Data/Archived_Player_Logs/some-player-feed.xlsx [more.xlsx ...]  # one-shot: backfill player_absences from one or more archived player-feed files (paths required)
+python -m bigdataball.patch_fantasy_id_types     # one-time: cast fantasy_logs PLAYER_ID/GAME_ID FLOAT -> INTEGER
 python -m bigdataball.run_db_patch               # one-time retroactive player-name fix
 python -m bigdataball.verify_db_patch            # verify the name patch
 ```
@@ -91,5 +92,7 @@ In particular:
 When updating project guidance, prefer editing the specific doc in `docs/codebase/` over expanding this file.
 
 When working on a GitHub issue, check if the task is already described in `plans/README.md`. Update the plan status on completion.
+
+`docs/nba-fantasy-logs-db-reference.md` is the handoff doc for **external consumers** of `nba_fantasy_logs.db` (e.g. the `nba-dfs-stats-lab` repo, which reads it via a read-only URI `ATTACH`). It documents the schema, keys, and data semantics as written by this pipeline. Keep it in sync when the DB schema or ingest semantics change.
 
 `.github/` contains a `sqlite-dba` agent and `sqlite-optimization` skill for inspecting/optimizing the database. `.claude/skills/improve/` holds a codebase-audit playbook.
