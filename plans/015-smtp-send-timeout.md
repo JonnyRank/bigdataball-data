@@ -21,6 +21,10 @@
 - **Category**: bug
 - **Planned at**: commit `aef8efa`, 2026-07-24
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/55
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean —
+  `git diff --stat aef8efa..HEAD -- src/bigdataball/email_notifier.py` is empty, and
+  the finding still holds (`grep -n "SMTP_SSL" src/bigdataball/email_notifier.py`
+  → line 20, still no `timeout=`). Excerpts and line anchors below are current.
 
 ## Why this matters
 

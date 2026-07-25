@@ -21,6 +21,10 @@
 - **Category**: dx
 - **Planned at**: commit `aef8efa`, 2026-07-24
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/57
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean —
+  `git diff --stat aef8efa..HEAD -- src/bigdataball/config.py docs/codebase/INTEGRATIONS.md`
+  is empty, and no `.env.example` exists at the repo root. Excerpts and line
+  anchors below are current.
 
 ## Why this matters
 

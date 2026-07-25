@@ -34,6 +34,16 @@
   (`pyproject.toml`, `requirements-dev.txt`, `.github/workflows/test.yml`) are
   unchanged since `aef8efa`, so the drift check base still holds.
 - **Issue**: https://github.com/JonnyRank/bigdataball-data/issues/58
+- **Reconciled 2026-07-24 @ `ba82f6a`**: drift check clean —
+  `git diff --stat aef8efa..HEAD -- pyproject.toml requirements-dev.txt .github/workflows/test.yml`
+  is empty, and the finding still holds (`grep -rn -i ruff` over those three files
+  returns nothing). Excerpts and line anchors below are current. Note for the
+  executor: this plan updates `docs/codebase/STACK.md`'s "Linting / Formatting"
+  section only. That file has separate, unrelated staleness elsewhere (the CI
+  Python version and the `requires-python` floor), which the `codebase-doc-refresh`
+  skill owns — if a refresh has run since this plan was written, `STACK.md` lines
+  5/6/49/53 may read differently than any excerpt here. That is the refresh, not
+  drift; leave those lines alone and change only the Ruff ones.
 
 ## Why this matters
 
