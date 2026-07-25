@@ -111,103 +111,63 @@ WHERE f.PLAYER <> d.PLAYER_NAME;   -- non-zero is expected; see §7
 
 ---
 
-## 3. Where the file lives, and how to attach it
+## 3. Connecting
 
-### 3.1 Path resolution
+The DB lives at `<base>/nba_fantasy_logs.db`, where the pipeline resolves `<base>` as
+`BIGDATABALL_DATA_DIR` env override → `G:\My Drive\Documents\bigdataball` if that
+mount exists → `<bigdataball-data repo root>/Data`. Take the path from your own config
+rather than re-implementing that precedence.
 
-The pipeline resolves its base data dir in `src/bigdataball/paths.py`, in this order:
+**The connection mechanics are already handled by `nba_dfs_stats_lab.connection`**
+(`get_connection` / `read_only_uri` / `attach_ops`) — `uri=True` on the main
+connection, Windows drive-letter and space handling in the URI, absolute-path
+enforcement, and a validated attach alias. Nothing in this document needs to change
+that. What follows is only the part that module does *not* cover.
 
-1. `BIGDATABALL_DATA_DIR` environment variable (override; used by tests and custom runs)
-2. `G:\My Drive\Documents\bigdataball` — if the `G:\My Drive` mount exists (the
-   maintainer's Windows machine)
-3. `<bigdataball-data repo root>/Data` — local fallback
-
-The DB is always `<base>/nba_fantasy_logs.db`.
-
-**Recommendation for `nba-dfs-stats-lab`:** do **not** re-implement this precedence.
-Take the path from your own config — a `NBA_FANTASY_LOGS_DB` env var with a sensible
-default — and fail loudly with the resolved path in the message if the file is absent.
-Reproducing a three-way fallback in a second repo means two places to fix at the next
-environment change.
-
-### 3.2 Read-only ATTACH
-
-```sql
-ATTACH DATABASE 'file:/absolute/path/to/nba_fantasy_logs.db?mode=ro' AS bdb;
-```
-
-From Python:
+**Verify the read-only attach actually took effect.** `attach_ops`' docstring states
+"Any write to `ops.*` raises OperationalError" — that is a claim about SQLite's
+behavior, not something the code checks. If a `file:` URI were ever treated as a
+literal filename, you would get a silently *writable* handle to the maintainer's
+production DB. Probe it once at startup, inside a savepoint rolled back
+unconditionally, so the check cannot leave a mark in the very case it detects:
 
 ```python
-import sqlite3
-from pathlib import Path
-
-conn = sqlite3.connect(lab_db_path, uri=True)   # your own writable DB
-src = Path(fantasy_logs_path).resolve().as_posix()
-conn.execute("ATTACH DATABASE ? AS bdb", (f"file:{src}?mode=ro",))
-```
-
-Pass `uri=True` on the main connection. Whether SQLite honours a `file:` URI inside
-`ATTACH` depends on the build (`SQLITE_USE_URI`) *or* on the main connection having
-been opened with the URI flag — it happens to work either way on the SQLite 3.45
-bundled with current CPython, but the flag is the portable guarantee.
-
-**Assert that `mode=ro` actually took effect** rather than trusting the string — a URI
-silently treated as a literal filename gives you a *writable* handle to the
-maintainer's production DB. Probe with a write, but run it inside a savepoint and roll
-back unconditionally, so that the check itself cannot leave a mark in the failure case
-it exists to detect:
-
-```python
-def assert_attached_readonly(conn, schema="bdb"):
-    conn.execute(f"SAVEPOINT ro_probe")
+def assert_attached_readonly(conn, alias="ops"):
+    conn.execute("SAVEPOINT ro_probe")
     try:
-        conn.execute(f"CREATE TABLE {schema}.__ro_probe__(x)")
+        conn.execute(f"CREATE TABLE {alias}.__ro_probe__(x)")
     except sqlite3.OperationalError:
         return                                   # expected: readonly database
     finally:
         conn.execute("ROLLBACK TO ro_probe")     # unconditional
         conn.execute("RELEASE ro_probe")
     raise RuntimeError(
-        f"{schema} attached WRITABLE - the mode=ro URI did not take effect. Refusing "
+        f"{alias} attached WRITABLE - the mode=ro URI did not take effect. Refusing "
         "to continue: this handle can modify the source database."
     )
 ```
 
-The `finally` runs on both paths, so the probe table never survives even when the
-write unexpectedly succeeds. Verified on SQLite 3.45.1: the read-only case raises
-`attempt to write a readonly database`, and the writable case leaves `sqlite_master`
-unchanged after the rollback.
+Verified on SQLite 3.45.1: the read-only case raises `attempt to write a readonly
+database`, and the writable case leaves `sqlite_master` unchanged after the rollback.
 
-If you use SQLAlchemy for the main connection, run the `ATTACH` as raw SQL on the
-DBAPI connection — and re-issue it on every new connection, since `ATTACH` is
-per-connection, not per-database. With a connection pool, wire it to an event hook
-(`sqlalchemy.event.listen(engine, "connect", ...)`) so pooled connections don't
-silently lack the attachment.
+**Operational caveats:**
 
-**Caveats that will bite you:**
-
-- **`mode=ro` is not `immutable=1`.** A read-only connection still needs to be able to
-  read (and, for WAL, memory-map) the sidecar files. If the pipeline ever leaves the DB
-  in WAL mode, opening it `mode=ro` from a directory you can't write to fails with
-  "unable to open database file". The pipeline does not explicitly set `journal_mode`
-  (SQLAlchemy/`sqlite3` default is `delete`), so this should not arise — but check for
-  stray `nba_fantasy_logs.db-wal` / `-shm` files before concluding your ATTACH is
-  broken. Do **not** reach for `immutable=1` as a workaround: it tells SQLite the file
-  can never change, which is false for a DB rewritten daily, and produces silent
-  garbage rather than an error if it is stale.
 - **The pipeline rewrites tables under you.** `fantasy_averages` is dropped and
   recreated (`if_exists="replace"`) on every run, and `patch_fantasy_id_types.py` /
-  `check_ingest_duplicates.py` rebuild or delete rows. Long-lived read connections
-  spanning a pipeline run can see errors or a torn view. Attach, read what you need,
-  detach.
-- **Don't create views in your DB that reference `bdb.*`.** A view stored in
-  `nba-dfs-stats-lab` referencing an attached schema only resolves when that exact
-  alias is attached; it breaks for anyone opening your DB standalone. Materialize what
-  you need into your own tables instead (see §9).
-- **Cross-database writes.** `INSERT INTO main.x SELECT ... FROM bdb.y` is fine and is
-  the intended pattern. `ATTACH` in read-only mode makes accidental writes to `bdb`
-  an error rather than a corruption.
+  `check_ingest_duplicates.py` rebuild or delete rows. A connection holding `ops`
+  attached across a pipeline run can see errors or a torn view. Keep read
+  connections short-lived: attach, read, close.
+- **`mode=ro` is not `immutable=1`.** If the source DB is ever left in WAL mode, a
+  read-only open needs to reach its `-wal`/`-shm` sidecars and fails with "unable to
+  open database file" if it can't. The pipeline never sets `journal_mode` (so it stays
+  `delete`), but check for stray `nba_fantasy_logs.db-wal` files before blaming your
+  URI. Do **not** reach for `immutable=1`: it asserts the file never changes, which is
+  false for a DB rewritten daily, and yields silent garbage rather than an error.
+  (Note your analytics DB sets `journal_mode = WAL` — that's yours, and unrelated.)
+- **Don't create views in your DB that reference `ops.*`.** They only resolve while
+  that alias is attached, so the DB breaks for anyone opening it standalone.
+  Materialize into your own tables instead (see §9).
+- `INSERT INTO main.x SELECT ... FROM ops.y` is the intended pattern.
 
 ---
 
