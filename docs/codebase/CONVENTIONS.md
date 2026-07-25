@@ -34,7 +34,7 @@ These are observed from the code, not enforced by any linter (none is configured
 - Pipeline/aggregation scripts: SQLAlchemy `create_engine(f"sqlite:///{DB_PATH}")`, `pandas.read_sql`/`to_sql`, and `with engine.begin():` for DDL transactions.
 - Maintenance scripts (`check_ingest_duplicates.py`, `run_db_patch.py`, `verify_db_patch.py`, `create_log_indexes.py`): raw `sqlite3.connect` + cursor.
 - **UNIQUE-index backstop.** Log tables have no declared PK, but each upload path calls `ensure_unique_index()` (`CREATE UNIQUE INDEX IF NOT EXISTS idx_<table>_player_date ON <table> ("PLAYER_ID", "DATE")`) from `initialize_database()` and after each `to_sql(append)`. It swallows `"no such table"` on the first run (the table doesn't exist until `to_sql` creates it) and is otherwise idempotent. When adding a new log-style table, follow the same pattern.
-- **Tests must dispose the engine** before tmp cleanup so Windows can delete the locked SQLite file (`tests/conftest.py:24-27`).
+- **Tests must dispose the engine** before tmp cleanup so Windows can delete the locked SQLite file — both conftest fixtures do this (`tests/conftest.py:76,102`).
 
 ## Player Name Standardization
 
@@ -69,6 +69,6 @@ The export scripts interpolate these via `{seasons.slate_seasons_sql()}` / `{sea
 - `create_summary_tables.py:10` (path via `paths`)
 - `dk_matching.py:10-95`, `export_slate_averages_vw.py:27-64`
 - `run_db_patch.py:28-49,61-67`
-- `tests/conftest.py:18-27`
+- `tests/conftest.py:32-80,83-103` (the two env-seam fixtures)
 - `pytest.ini:2`
 - `mappings.py:1-17`, `seasons.py`

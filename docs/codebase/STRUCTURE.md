@@ -4,7 +4,9 @@
 
 Src layout — all runtime modules live under the installable `src/bigdataball/` package and import each other with package-relative imports (`from . import mappings`). This was the `src/bigdataball/` refactor tracked by `plans/009-flat-to-src-layout.md`, executed 2026-07-24 (the earlier flat layout at the repo root is gone). See `CONCERNS.md` (Intent vs. Reality).
 
-```
+> **Reading the file references in these docs:** a bare module name (`paths.py`, `config.py:7`) always means `src/bigdataball/<name>` — every module name is unique in the repo, so the prefix is omitted for brevity. Paths that start with `tests/`, `plans/`, `docs/`, or `.github/` are repo-root-relative as written.
+
+```text
 bigdataball-data/
 ├── src/bigdataball/                # the installable package (src layout, plan 009)
 │   ├── __init__.py
@@ -37,10 +39,10 @@ bigdataball-data/
 ├── CLAUDE.md                       # primary project guidance
 ├── tests/                          # pytest suite
 │   ├── __init__.py
-│   ├── conftest.py                 # `player_upload` fixture (env-seam fresh import)
+│   ├── conftest.py                 # `player_upload` + `fantasy_upload` fixtures (env-seam fresh import)
 │   ├── helpers.py                  # synthetic .xlsx writers
 │   └── test_*.py                   # 11 test modules, 68 tests (see TESTING.md)
-├── plans/                          # improve-skill handoff plans (001–014 + README index)
+├── plans/                          # improve-skill handoff plans (001–022 + README index)
 ├── docs/codebase/                  # (this documentation)
 ├── *.sql                           # standalone/manual SQL (git-ignored via *.sql)
 ├── Data/                           # local fallback data dir (DB + archive folders)
@@ -67,6 +69,7 @@ All modules are importable from the `bigdataball` package and runnable via `pyth
 | `create_log_indexes.py` (CLI) | One-off backfill of the UNIQUE `(PLAYER_ID, DATE)` index on all three log tables (`--table` for one). Refuses to index a table that still has duplicates. |
 | `run_db_patch.py` / `verify_db_patch.py` | One-time retroactive name fix + verification. |
 | `patch_absence_column_names.py` (CLI) | One-time rename of `player_absences` `GAME_DATE`/`PLAYER_NAME` → `DATE`/`PLAYER`. |
+| `patch_fantasy_id_types.py` (CLI) | One-time migration casting `fantasy_logs` `PLAYER_ID`/`GAME_ID` from FLOAT to INTEGER (backup-first, idempotent, atomic table rebuild + UNIQUE-index recreation). Already run against the live DB 2026-07-23. |
 
 ## Key Files
 
@@ -74,7 +77,7 @@ All modules are importable from the `bigdataball` package and runnable via `pyth
 - **`paths.py`** — `resolve_base_data_path()`, the single source of truth for the DB base path (`BIGDATABALL_DATA_DIR` env → `G:` mount → local `Data/`). Every DB-touching script imports it (plan 005).
 - **`mappings.py`** — `PLAYER_NAME_MAP` dict, the single source of truth for name standardization.
 - **`CLAUDE.md`** — the most authoritative human-written description of architecture and conventions (more current than the README/setup guide).
-- **`plans/README.md`** — index of the fourteen improve-skill plans with execution status (all 001–014 now DONE — see the table there for the live state).
+- **`plans/README.md`** — index of the twenty-two improve-skill plans with execution status: **001–014 DONE and merged**, **015–022 TODO** (SMTP send timeout, atomic Drive downloads, `.env.example`, CI Ruff gate, export view-builder tests, orchestrator split, pre-commit hook, `run_db_patch.py` connection cleanup). See the table there for the live state — it is the authoritative backlog, and no source code has changed since plan 009 landed.
 
 ## Data Directories (under the resolved base path, git-ignored)
 
@@ -90,6 +93,6 @@ All modules are importable from the `bigdataball` package and runnable via `pyth
 - `daily_player_upload.py:74-302` (`main()` returns `(processed, overwritten, absences_count)`)
 - `config.py:1-36`, `paths.py` (`resolve_base_data_path`)
 - `mappings.py:5-17`
-- `plans/README.md` (plan status table — all 001–014 DONE)
+- `plans/README.md` (plan status table — 001–014 DONE, 015–022 TODO)
 - `tests/` directory (conftest, helpers, eleven `test_*.py` modules — 68 tests)
-- `.gitignore:19-31` (`*.db`, `*.sql` ignored)
+- `.gitignore:21` (`*.db`), `:26` (`*.egg-info/`), `:30` (`*.sql`)

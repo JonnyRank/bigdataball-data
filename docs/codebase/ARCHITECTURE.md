@@ -8,7 +8,7 @@ A single-machine, batch NBA DFS data pipeline. There is no service, API, or long
 
 Orchestrated by `daily_fantasy_log_upload.py:main()` (`daily_fantasy_log_upload.py:69-395`), in order:
 
-```
+```text
 Google Drive (.xlsx)
    │  drive_ingestion.main()           # download latest dfs-feed + player-feed
    ▼
@@ -39,7 +39,7 @@ There are no formal layers (no domain/data/service split). Functional groupings:
 2. **Ingestion / ETL** — `daily_player_upload.py` and the inline loop in `daily_fantasy_log_upload.py`. Read Excel → sanitize headers → rename → standardize names (`mappings.py`) → dedup → `to_sql(append)`. `absence_ingestion.py` is a shared module (no module-level path/engine — receives an injected `engine`) that reads the same player-feed file's second sheet (`DNP-DND-NWT`) into `player_absences`; it's called from `daily_player_upload.py:main()` after box scores are loaded for that file, and also from the standalone one-shot backfill CLI `backfill_player_absences.py` (reads already-archived files in place, does not move them).
 3. **Aggregation** — `create_summary_tables.py`: joins logs with `dim_players` + `map_teams`, derives `SEASON_TYPE`/`SEASON_KEY`, aggregates to `fantasy_averages`, builds player-average views.
 4. **Slate selection / export** — the three `export_*` scripts, all sharing `dk_matching.py`: read `~/Downloads/DKEntries.csv`, fuzzy-match DK names to DB, build slate views / CSVs scoped to the current slate (season windows from `seasons.py`).
-5. **Maintenance / setup** — `seed_map_teams.py` (create + populate `map_teams`), `create_log_indexes.py` (backfill the plan-012 UNIQUE indexes), `check_ingest_duplicates.py` (dedup safety net), `run_db_patch.py` / `verify_db_patch.py` (retroactive name fixes), `patch_absence_column_names.py` (one-time `player_absences` column rename to the `DATE`/`PLAYER` convention).
+5. **Maintenance / setup** — `seed_map_teams.py` (create + populate `map_teams`), `create_log_indexes.py` (backfill the plan-012 UNIQUE indexes), `check_ingest_duplicates.py` (dedup safety net), `run_db_patch.py` / `verify_db_patch.py` (retroactive name fixes), and the two one-time schema migrations — `patch_absence_column_names.py` (`player_absences` column rename to the `DATE`/`PLAYER` convention) and `patch_fantasy_id_types.py` (`fantasy_logs` `PLAYER_ID`/`GAME_ID` FLOAT→INTEGER, plan 014; already applied to the live DB, kept for fresh/offseason DBs).
 6. **Notification** — `email_notifier.py` (SMTP over SSL).
 
 ## Key Architectural Patterns
@@ -61,6 +61,8 @@ There are no formal layers (no domain/data/service split). Functional groupings:
 ## Database Schema
 
 Tables (all three log tables carry a UNIQUE index `idx_<table>_player_date` on `("PLAYER_ID", "DATE")` as of plan 012 — no declared PK, but the index enforces the natural key): `fantasy_logs`, `player_logs`, `dim_players` (`PLAYER_ID` PK), `fantasy_averages` (rebuilt `if_exists="replace"`), `map_teams` (`RAW_TEAM_NAME` PK → `TEAM_ABBREVIATION`), and `player_absences` (detailed below).
+
+`fantasy_logs.PLAYER_ID`/`GAME_ID` are **INTEGER** as of plan 014: incoming IDs are `to_numeric(errors="raise")`-checked, null-dropped, fractional-rejected, and cast via `dtype={...: Integer()}` on `to_sql`. The dedup key is self-healing — the DB-side `PLAYER_ID` is normalized through `Int64` before the `log_key` set is built — so ingestion is correct whether or not `patch_fantasy_id_types.py` has been run on a given DB. Dropped rows are counted into a run-level `fantasy_rows_dropped` and surfaced in the **success** email only (`daily_fantasy_log_upload.py:435,439-444`) — the error branch at `:423-428` sends `pipeline_errors` alone, so a run that both drops rows and fails a later stage reports the failure without the drop count.
 
 `player_absences` holds one row per player per missed game, parsed from the player-feed's `DNP-DND-NWT` sheet by `absence_ingestion.py` (called from `daily_player_upload.py` and `backfill_player_absences.py`). Columns: `DATE`, `GAME_ID` (INTEGER, matching `player_logs.GAME_ID`), `TEAM`, `OPPONENT`, `PLAYER_ID`, `PLAYER`, `STATUS`, `REASON`, and derived `ABSENCE_TYPE` (`'DNP-CD'` when `REASON == "COACH'S DECISION"`, else `'INJURY/ILLNESS/OTHER'`). Conflict policy: **box score wins at ingest** — a row is skipped if `player_logs` already has a box score for the same `(PLAYER_ID, DATE)` (re-keyed from GAME_ID by plan 012).
 
