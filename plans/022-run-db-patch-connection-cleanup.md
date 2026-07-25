@@ -565,5 +565,5 @@ Stop and report back (do not improvise) if:
 - **Docs follow-up**: `docs/codebase/TESTING.md` lists `run_db_patch.py` under "No
   tests" (line 58) and its test-file inventory (lines 20–34) will be one file and
   4 tests out of date once this lands. Do **not** edit `docs/codebase/` in this
-  plan — refresh it afterwards with the `codebase-doc-refresh` skill, which owns
+  plan — refresh it afterward with the `codebase-doc-refresh` skill, which owns
   those files.
