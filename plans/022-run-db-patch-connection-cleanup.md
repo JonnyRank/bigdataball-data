@@ -476,17 +476,23 @@ def test_failed_run_commits_nothing(patch_module):
 
 ### Step 5: Confirm nothing outside scope changed
 
-**Verify**: `git status --porcelain` → exactly these entries and nothing else
-(note the leading space in the ` M` status codes):
+**Verify**: `git status --porcelain` → these two entries, **required** (note the
+leading space in the ` M` status code):
 
 ```text
  M src/bigdataball/run_db_patch.py
 ?? tests/test_run_db_patch.py
+```
+
+Plus this **optional** third entry, and only if you are updating the index
+yourself — omit it if a reviewer told you they maintain `plans/README.md`:
+
+```text
  M plans/README.md
 ```
 
-The third line appears only if you are updating the index — skip it if a reviewer
-told you they maintain it.
+Nothing else may appear. Any other path in the output is an out-of-scope change:
+revert it before continuing.
 
 ## Test plan
 
