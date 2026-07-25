@@ -31,7 +31,7 @@ so the table below carries **eight** TODO plans.
 
 *Docs.* Two `docs/codebase/` files carry confirmed factual drift — `STACK.md` on the
 CI Python version and the `requires-python` floor, `TESTING.md` on its test inventory
-and a DONE plan still labelled TODO. **Recorded under "considered and rejected", not
+and a DONE plan still labeled TODO. **Recorded under "considered and rejected", not
 planned**: routine `docs/codebase/` refreshes belong to the `codebase-doc-refresh`
 skill, not to an `improve` plan. Details are in that section below so the next
 reconcile doesn't re-raise them.
@@ -175,11 +175,12 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   **015 → 016** (the two robustness bug fixes) → **017 → 018** (cheap DX wins) → **019**
   (the coverage expansion). 019 is tests-only and touches no `src/` code; 017 touches no
   code at all.
-- **022 (reconcile 2026-07-24) is independent of everything else.** It touches only
-  `src/bigdataball/run_db_patch.py` plus a new `tests/test_run_db_patch.py`, and
+- **022 (reconcile 2026-07-24) is independent of everything else.** Its only
+  implementation files are `src/bigdataball/run_db_patch.py` and a new
+  `tests/test_run_db_patch.py` (plus this index, for the status-row update), and it
   neither blocks nor is blocked by 015–021. One knock-on to note: it adds a test
   file, so `docs/codebase/TESTING.md`'s inventory goes one row stale when it lands —
-  refresh the docs afterwards with the `codebase-doc-refresh` skill.
+  refresh the docs afterward with the `codebase-doc-refresh` skill.
 - **021 (pre-commit Ruff) hard-depends on 018 (CI Ruff gate).** 021 reuses the
   `[tool.ruff]` config and the pinned `ruff==` version that 018 adds to
   `pyproject.toml`/`requirements-dev.txt`; without 018 the pre-commit hooks would run
