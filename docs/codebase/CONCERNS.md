@@ -29,6 +29,15 @@ Production-code concerns first; test-only and intent-divergence items are separa
 14. **Interactive OAuth blocks headless runs.** First Drive auth opens a browser; a scheduled/headless run is impossible without a pre-existing valid `token.json`. Token refresh depends on the project being "In Production" in GCP. *Evidence:* `auth_manager.py:20-37`, setup guide §"Consent Screen Strategy".
 15. **Pipeline trigger lives outside the repo.** The daily run is driven by **Windows Task Scheduler** on the maintainer's machine — there is no committed scheduler config, so the trigger is undiscoverable from the repo alone and is tied to one host (which must also hold a valid `token.json`). Combined with #13/#14, the pipeline is effectively single-machine. *Source:* maintainer (2026-06-17).
 
+## Planned But Not Yet Fixed (open plans 015–022)
+
+Every item below was re-verified against the live code on 2026-07-25; none has been fixed. These are the confirmed-open half of `plans/README.md` — see the plan files for the full findings.
+
+16. **The notification email has no network timeout.** `email_notifier.py:20` opens `smtplib.SMTP_SSL("smtp.gmail.com", 465)` with no `timeout=`, so an unattended run can hang indefinitely on a stalled Gmail endpoint. Latent (needs a network fault to bite) but it silently stalls a pipeline whose entire purpose is unattended daily runs. *Plan 015 / issue #55.* *Evidence:* `email_notifier.py:20`.
+17. **Drive downloads are not atomic.** `drive_ingestion.py:64` writes `io.FileIO(file_path, "wb")` straight to the final path, so an interrupted download leaves a truncated `.xlsx` at the destination that the next run ingests as complete. *Plan 016 / issue #56.* *Evidence:* `drive_ingestion.py:64`.
+18. **`run_db_patch.py` leaks its SQLite connection on early-exit paths.** `conn = sqlite3.connect(...)` at `run_db_patch.py:18` is only closed at `run_db_patch.py:70`; error/early-return paths bypass it. Low impact for a one-time script, but it keeps the DB file locked on Windows. *Plan 022 / issue #53 (filed by the maintainer from the PR #52 review).* *Evidence:* `run_db_patch.py:18,70`.
+19. **No `.env.example`, no CI lint/format gate, and the orchestrator is still one file.** Three known DX/structure gaps with plans written but not executed: a committed env template (plan 017 / #57), a Ruff lint+format gate in CI plus a follow-on pre-commit hook (plans 018/021 / #58, #64), and splitting the pipeline orchestrator out of `daily_fantasy_log_upload.py` so the file stops being both orchestrator and fantasy-log ingester (plan 020 / #62 — this is the structural fix for concern #3). *Evidence:* `plans/README.md` status table.
+
 ## Security Notes (reviewed, low risk)
 
 - Credentials (`.env`, `token.json`, `client_secrets.json`) are git-ignored; nothing sensitive is committed (`.gitignore:4-6`).
@@ -37,11 +46,11 @@ Production-code concerns first; test-only and intent-divergence items are separa
 
 ## High-Churn Files (watch for hidden complexity)
 
-From `git` history (last 90 days, top of list): `plans/README.md` (27), `CLAUDE.md` (9), `daily_fantasy_log_upload.py` (8), `daily_player_upload.py` (6), `absence_ingestion.py` (5), `export_slate_averages_vw.py` (4), plus the plan docs and their test files. Among *pipeline* code the orchestrator (`daily_fantasy_log_upload.py`), the two upload paths, and the newer `absence_ingestion.py` see the most churn — expect ongoing edits there. *Evidence:* `git log --since="90 days ago" --name-only`.
+From `git` history (last 90 days, refreshed 2026-07-25): `plans/README.md` (40), `CLAUDE.md` (10), `plans/018` (9), `plans/009` (9), `tests/test_daily_fantasy_log_upload.py` (8), `plans/022` (8), `plans/012` (8), `daily_fantasy_log_upload.py` (8), then the `docs/codebase/` files (5 each). Among *pipeline* code the orchestrator (`daily_fantasy_log_upload.py`) still dominates, followed by the two upload paths and `absence_ingestion.py` — expect ongoing edits there, and note that plan 020 proposes splitting the orchestrator precisely because of this concentration. The top of the list is now planning/doc churn rather than source churn: **no file under `src/` has changed since plan 009 landed** (`aef8efa`). *Evidence:* `git log --since="90 days ago" --name-only`, `git diff --name-only aef8efa..HEAD`.
 
 ## Test-Only Items (coverage gaps, not production debt)
 
-- The suite is now **68 tests across 11 modules** (see `TESTING.md`). Remaining coverage gaps: the view-building bodies of the export scripts and the Drive/email modules. (`create_summary_tables.py` and the orchestrator are now covered — plans 010/011 DONE.) These are coverage gaps, not runtime bugs. No coverage tooling configured.
+- The suite is **68 tests across 11 modules** (see `TESTING.md` for the per-module inventory). Remaining coverage gaps: the view-building bodies of the three `export_*` scripts (plan 019, TODO) and the Drive/email modules. (`create_summary_tables.py` and the fantasy-log ingestion loop are now covered — plans 010/011 DONE.) These are coverage gaps, not runtime bugs. No coverage tooling configured.
 
 ## Evidence
 
