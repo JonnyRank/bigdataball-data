@@ -526,11 +526,11 @@ Machine-checkable. ALL must hold:
 - [ ] `python -m pytest -q` → `72 passed`
 - [ ] `test -f tests/test_run_db_patch.py; echo $?` returns `0` (the new file
       exists — `git diff` cannot show it, since it is untracked)
-- [ ] `git status --porcelain` lists the two required entries from Step 5
-      (` M src/bigdataball/run_db_patch.py`, `?? tests/test_run_db_patch.py`),
-      plus ` M plans/README.md` only if you are updating the index, **and nothing
-      else** — this, not `git diff --stat`, is the scope check, because `git diff`
-      is blind to untracked files
+- [ ] `git status --porcelain` shows exactly the entries listed in Step 5: the two
+      required ones (modified `src/bigdataball/run_db_patch.py`, untracked
+      `tests/test_run_db_patch.py`), plus modified `plans/README.md` only if you
+      are updating the index, **and nothing else**. This, not `git diff --stat`,
+      is the scope check, because `git diff` is blind to untracked files
 - [ ] `git diff --stat` (tracked files only) shows
       `src/bigdataball/run_db_patch.py` and, optionally, `plans/README.md`
 - [ ] `git diff src/bigdataball/run_db_patch.py` contains **no** change to any

@@ -153,7 +153,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   no hard logic dependency.
 - **008 recommended after 005** so it can call `paths.resolve_base_data_path()`; it has an
   inline fallback if 005 isn't done yet.
-- **009 (src layout) is now the last remaining plan — nothing left to rebase.** As of the
+- **009 (src layout) was the last remaining plan of the 001–014 sequence and is now
+  merged — nothing left to rebase.** As of the
   2026-07-23 reconcile every other plan (003–008, 010–014) is DONE and merged, so the ordering
   hazard that used to dominate this note (executing 009 before the then-open 010/011/014 would
   shift their in-scope paths to `src/bigdataball/<module>.py`) no longer applies: those plans
