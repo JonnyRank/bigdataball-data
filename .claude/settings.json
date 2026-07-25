@@ -9,7 +9,9 @@
       "mcp__claude-code-remote__unsubscribe_pr_activity",
       "mcp__Claude_Code_Remote__send_later",
       "mcp__Claude_Code_Remote__delete_trigger",
-      "mcp__Claude_Code_Remote__unsubscribe_pr_activity"
+      "mcp__Claude_Code_Remote__unsubscribe_pr_activity",
+      "mcp__github__pull_request_read",
+      "mcp__github__unsubscribe_pr_activity"
     ]
   },
   "hooks": {
