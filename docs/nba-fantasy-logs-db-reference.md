@@ -4,6 +4,12 @@
 database ingesting historical NBA DFS projections and lineups) that will read
 `nba_fantasy_logs.db` via a **read-only URI `ATTACH`**.
 
+**Scope:** `nba-dfs-stats-lab` reads the **five foundational tables only** —
+`fantasy_logs`, `player_logs`, `player_absences`, `dim_players`, `map_teams`. The
+calculated table (`fantasy_averages`) and all five views are deliberately out of
+scope; aggregates are computed in the lab from the per-game rows. §4 says why, and
+§5.6 carries forward the derivation rules that decision hands you.
+
 **Source of truth:** this document is derived from the `bigdataball-data` pipeline
 source at commit `aa76cd5` (2026-07-25). The database file itself is **not committed**
 to any repo (git-ignored, ~36 MB, lives on the maintainer's machine), so every schema
@@ -31,9 +37,9 @@ in full below.
 | 5 | `map_teams` is now created/populated by `seed_map_teams.py` | 008 | It exists reliably now, with a documented raw-name format ("Golden State", "LA Clippers" — city-only, no nickname). |
 | 6 | Season filters centralized in `seasons.py`; source layout moved to `src/bigdataball/` | 007, 009 | If you planned to import anything from the pipeline repo, imports are now `from bigdataball.<mod> import ...` and require `pip install -e .` or `PYTHONPATH=src`. |
 
-**The single most important consequence:** `PLAYER_ID` holds **integer values**
-everywhere — `fantasy_logs`, `player_logs`, `player_absences`, `dim_players`,
-`fantasy_averages`. Join on it directly. `GAME_ID` is integer-valued and **unpadded**
+**The single most important consequence:** `PLAYER_ID` holds **integer values** in all
+four tables that carry it — `fantasy_logs`, `player_logs`, `player_absences`,
+`dim_players`. Join on it directly. `GAME_ID` is integer-valued and **unpadded**
 (e.g. `22500001`); do not zero-pad, do not treat it as TEXT.
 
 Note the distinction between *stored values* and *declared column types*: only
@@ -62,7 +68,6 @@ PRAGMA table_info(fantasy_logs);
 PRAGMA table_info(player_logs);
 PRAGMA table_info(player_absences);
 PRAGMA table_info(dim_players);
-PRAGMA table_info(fantasy_averages);
 PRAGMA table_info(map_teams);
 
 -- 2. Actual storage classes of the ID columns (declared type != stored type in SQLite)
@@ -78,7 +83,8 @@ SELECT DISTINCT typeof(PLAYER_ID), typeof(GAME_ID) FROM player_absences;
 --                                     a new, unexplained condition -- investigate the
 --                                     source feed before building on those tables,
 --                                     and CAST(... AS INTEGER) on that side of any
---                                     cross-table join in the meantime. See §8.6.
+--                                     cross-table join in the meantime. See the
+--                                     player_logs ID-hardening note in §8.
 
 -- 3. The UNIQUE indexes (plan 012)
 PRAGMA index_list(fantasy_logs);
@@ -92,9 +98,10 @@ SELECT MIN(DATE), MAX(DATE), COUNT(*) FROM fantasy_logs;
 SELECT MIN(DATE), MAX(DATE), COUNT(*) FROM player_logs;
 SELECT MIN(DATE), MAX(DATE), COUNT(*) FROM player_absences;
 
--- 5. Season coverage (drives what your projections can be joined against)
+-- 5. Season coverage. These are the raw strings you will parse yourself (§5.6),
+--    so check them against the classification rules rather than assuming.
 SELECT SEASON_SEGMENT, COUNT(*) FROM fantasy_logs GROUP BY 1 ORDER BY 1;
-SELECT SEASON_TYPE, SEASON, COUNT(*) FROM fantasy_averages GROUP BY 1,2 ORDER BY 2,1;
+SELECT SEASON_SEGMENT, COUNT(*) FROM player_logs  GROUP BY 1 ORDER BY 1;
 
 -- 6. Raw team strings (confirm the map_teams join covers them all)
 SELECT DISTINCT TEAM FROM fantasy_logs ORDER BY 1;
@@ -171,35 +178,18 @@ database`, and the writable case leaves `sqlite_master` unchanged after the roll
 
 ---
 
-## 4. Object inventory
+## 4. What is in scope
 
-**Tables**
+**The five tables `nba-dfs-stats-lab` reads.** These are the foundational, ingested
+tables — everything else in the file is derived from them.
 
-| Table | Grain | Rows written by |
-|-------|-------|-----------------|
+| Table | Grain | Written by |
+|-------|-------|------------|
 | `fantasy_logs` | one row per player per game (DFS feed, includes DK salary/points) | `daily_fantasy_log_upload.py` (inline loop) |
 | `player_logs` | one row per player per game (box-score feed) | `daily_player_upload.py` |
 | `player_absences` | one row per player per **missed** game | `absence_ingestion.py` (via `daily_player_upload.py`, or `backfill_player_absences.py`) |
 | `dim_players` | one row per player | learned by all three ingest paths |
 | `map_teams` | one row per raw team string | `seed_map_teams.py` |
-| `fantasy_averages` | one row per (season type, player, season, team) | `create_summary_tables.py`, `if_exists="replace"` |
-
-**Views** (all `DROP` + `CREATE` on each run)
-
-| View | Built by | Contents |
-|------|----------|----------|
-| `vw_player_averages_regular_season` | `create_summary_tables.py` | `fantasy_averages WHERE SEASON_TYPE='Regular'` |
-| `vw_player_averages_playoffs` | `create_summary_tables.py` | `fantasy_averages WHERE SEASON_TYPE='Playoffs'` |
-| `vw_daily_slate` | `export_slate_averages_vw.py` | **today's DK slate only** |
-| `vw_daily_slate_l30` | `export_slate_averages_vw.py` | **today's DK slate only**, current season, with `L30FPPM` |
-| `vw_daily_slate_playoffs` | `export_playoffs_slate_averages_vw.py` | **today's DK slate only**, playoffs |
-
-> **The three `vw_daily_slate*` views are ephemeral and slate-scoped.** Their `WHERE
-> PLAYER IN (...)` list is regenerated from whatever `~/Downloads/DKEntries.csv`
-> happened to contain on the last pipeline run, with player names resolved by fuzzy
-> match. They are a UI surface for Excel, **not** an analysis source. Do not build
-> `nba-dfs-stats-lab` on them. Use `fantasy_averages` (or the two
-> `vw_player_averages_*` views) and apply your own slate filter.
 
 **Indexes**
 
@@ -209,9 +199,34 @@ database`, and the writable case leaves `sqlite_master` unchanged after the roll
 | `idx_player_logs_player_date` | `player_logs` | UNIQUE (`"PLAYER_ID"`, `"DATE"`) |
 | `idx_player_absences_player_date` | `player_absences` | UNIQUE (`"PLAYER_ID"`, `"DATE"`) |
 
-Plus the implicit index on `dim_players.PLAYER_ID` (`INTEGER PRIMARY KEY` — it is a
-rowid alias, so there is no separate index object). `map_teams` and `fantasy_averages`
-have **no** indexes and **no** declared primary keys.
+Plus the implicit index on `dim_players.PLAYER_ID` (`INTEGER PRIMARY KEY` — a rowid
+alias, so no separate index object). `map_teams` has **no** index and **no** PK.
+
+### Out of scope — the derived objects, and why to leave them alone
+
+The DB also contains one calculated table, `fantasy_averages` (built by
+`create_summary_tables.py`), and five views on top of it:
+`vw_player_averages_regular_season`, `vw_player_averages_playoffs`, `vw_daily_slate`,
+`vw_daily_slate_l30`, `vw_daily_slate_playoffs`. **Do not query any of them.** You will
+see them in `sqlite_master`, and two of them look like exactly what a stats lab wants.
+They are not:
+
+- **They are presentation artifacts for Excel.** `fantasy_averages` is rounded,
+  `fillna(0)`'d (so a single-game stdev, a zero-minute rate, and a real zero are
+  indistinguishable), and split per team — a traded player has multiple rows for one
+  season, so naively averaging them is wrong.
+- **One column is time-dependent.** `L30FPPM` is computed against
+  `pd.Timestamp.now()` at *build* time, not slate date. It changes meaning depending on
+  when the pipeline last ran and silently goes to `0` in the offseason.
+- **The three `vw_daily_slate*` views are ephemeral.** Their `WHERE PLAYER IN (...)`
+  list is regenerated each run from whatever `~/Downloads/DKEntries.csv` contained that
+  day, fuzzy-matched. They describe one slate, not history.
+- **All of it is dropped and recreated every run** (`if_exists="replace"`, `DROP VIEW`
+  / `CREATE VIEW`), so nothing in them is a stable reference.
+
+Computing your own aggregates from the five foundational tables is both more correct
+and more flexible — it is the only way to get "as of slate date" features without
+lookahead. §5.6 carries forward the derivation rules you inherit by doing so.
 
 ---
 
@@ -284,8 +299,8 @@ underscores. Rename map:
 | unchanged | `GAME_ID`, `PLAYER_ID`, `POSITION`, `FG`, `FGA`, `3P`, `3PA`, `FT`, `FTA`, `PF`, `PTS`, `DAYS_REST` |
 
 `DATE` is normalized to `'YYYY-MM-DD'` the same way. `PLAYER_ID`/`GAME_ID` are
-INTEGER because the player feed delivers clean integer IDs (no explicit cast is
-applied here — unlike `fantasy_logs`; see §8, gotcha 6).
+integer-valued because the player feed delivers clean integer IDs — no explicit cast
+is applied here, unlike `fantasy_logs` (see the ID-hardening note in §8).
 
 **No DraftKings columns.** Salary and DK points exist **only** in `fantasy_logs`.
 
@@ -375,97 +390,73 @@ Confirmed BigDataBall raw format: **city-only or two-word city, no nickname, usi
 "LA" not "Los Angeles"** — `Atlanta`, `Golden State`, `LA Clippers`, `LA Lakers`,
 `New Orleans`, `New York`, `Oklahoma City`, `San Antonio`, etc.
 
-> A raw team string with no `map_teams` row yields `TEAM_ABBREVIATION = NULL` in
-> `create_summary_tables.py`, and pandas' `groupby` **drops NULL group keys** — so
-> those players are silently missing from `fantasy_averages`. `seed_map_teams.py`
-> exits non-zero if any raw name is unmapped, but only when it is run. Query 6 in §2
-> is the check.
+> A raw team string with no `map_teams` row maps to NULL. In the pipeline that
+> silently drops those players from its aggregates (pandas `groupby` discards NULL
+> keys); in your code it will do whatever your join does, which is why §5.6 recommends
+> failing loudly instead. `seed_map_teams.py` exits non-zero on an unmapped name, but
+> only when it is run. Query 6 in §2 is the check.
 
-### 5.6 `fantasy_averages` — the aggregate table
+### 5.6 Derivations you now own
 
-Rebuilt from scratch on every pipeline run (`if_exists="replace"`), from `fantasy_logs`
-joined to `dim_players` (canonical name) and `map_teams` (abbreviation).
+By reading only the foundational tables you also take on the three derivations
+`create_summary_tables.py` used to perform. Replicate them once in
+`nba-dfs-stats-lab` and reuse; they are the difference between your numbers matching
+the pipeline's and quietly diverging.
 
-**Grain: one row per `(SEASON_TYPE, PLAYER_ID, PLAYER, SEASON, TEAM)`.** A player
-traded mid-season has **multiple rows for the same season** — one per team. Aggregating
-across them requires re-weighting by `GP`; you cannot average the averages. This is the
-most common way to get subtly wrong numbers out of this table.
-
-| Column | Type | Definition |
-|--------|------|-----------|
-| `SEASON_TYPE` | TEXT | `'Regular'` or `'Playoffs'` (see below) |
-| `PLAYER_ID` | INTEGER | |
-| `PLAYER` | TEXT | Canonical name from `dim_players` |
-| `SEASON` | TEXT | `'2024-25'` for Regular, `'2026'` for Playoffs |
-| `TEAM` | TEXT | Three-letter abbreviation (**not** the raw name) |
-| `GP` | INTEGER | Games played = row count |
-| `GS` | INTEGER | Games started = count of `STARTED = 'Y'` |
-| `SALPG` | INTEGER | Mean `DK_SALARY`, rounded to 0dp |
-| `FPPG` | REAL | Mean `DK_POINTS` |
-| `STDV_FPPG` | REAL | Sample stdev of `DK_POINTS` |
-| `MPG` | REAL | Mean `MINUTES` |
-| `STDV_MPG` | REAL | Sample stdev of `MINUTES` |
-| `FPPM` | REAL | `SUM(DK_POINTS) / SUM(MINUTES)` — **not** the mean of per-game FPPM |
-| `STDV_FPPM` | REAL | Sample stdev of the **per-game** `DK_POINTS/MINUTES` |
-| `USG` | REAL | Mean `USAGE` |
-| `GSFPPG`, `STDV_GSFPPG`, `GSMPG`, `STDV_GSMPG`, `GSFPPM`, `STDV_GSFPPM` | REAL | Same metrics restricted to games where `STARTED = 'Y'` |
-| `L30FPPM` | REAL | `SUM(DK_POINTS)/SUM(MINUTES)` over the last 30 days — **see the warning below** |
-| `DK_POINTS_sum`, `MINUTES_sum`, `GS_DK_POINTS_sum`, `GS_MINUTES_sum`, `L30_DK_POINTS_sum`, `L30_MINUTES_sum` | REAL | Intermediate aggregation columns the rename map never renamed. They persist in the table. **These are useful to you** — the `_sum` columns are exactly what you need to re-weight a traded player's season correctly. |
-
-**`SEASON_TYPE` classification** (from `SEASON_SEGMENT`):
+**1. Season type and season key — from `SEASON_SEGMENT`.** This is the only season
+marker in the log tables, and it is free text (e.g. `"2024-25 NBA Regular Season"`).
+The pipeline's classification:
 
 - `'Regular'` ⇐ `SEASON_SEGMENT` contains `"Regular Season"` **or** `"In-Season Tournament"`
 - `'Playoffs'` ⇐ contains `"Playoffs"` **or** `"Play-In"`
-- anything else ⇒ row is **dropped** from `fantasy_averages` entirely
+- anything else ⇒ the row is **dropped** from the pipeline's aggregates entirely
 
-So IST games count as regular season, and Play-In games count as playoffs. `SEASON` is
-the first 4-digit year found in the segment string, rendered `YYYY-YY` for Regular and
-`YYYY` for Playoffs.
+So **IST games count as regular season and Play-In games count as playoffs.** The
+season key is the first 4-digit year found in the string, rendered `YYYY-YY` for
+regular season (`"2024-25"`) and `YYYY` for playoffs (`"2026"`). Decide deliberately
+whether to keep the "anything else is dropped" behavior — silently dropping is a
+reasonable pipeline default but a bad one for a stats lab, where an unrecognized
+segment string should surface loudly. Run query 5 in §2 to see the live values.
 
-> **`L30FPPM` is not reproducible and not historical.** The "last 30 days" window is
-> computed against `pd.Timestamp.now()` **at build time**, so the value depends on when
-> the pipeline last ran, and it silently becomes `0` in the offseason (30 days with no
-> games ⇒ 0/0 ⇒ filled with 0). Never treat it as a stored historical feature. If
-> `nba-dfs-stats-lab` needs a trailing-30-day metric, compute it yourself from
-> `fantasy_logs` relative to the **slate date**, not the build date.
+**2. Team abbreviation — via `map_teams`.** The log tables hold the raw string
+(`"Golden State"`); join `TEAM = map_teams.RAW_TEAM_NAME` for `TEAM_ABBREVIATION`
+(`"GSW"`). A raw name with no mapping row yields NULL, and pandas' `groupby` silently
+drops NULL keys — which is how a whole team can vanish from an aggregate without an
+error. Use an inner join and assert the row count, or `LEFT JOIN` and fail on NULL.
 
-> **`fillna(0)` hides "undefined".** After rounding, all NaNs become `0` — a
-> single-game sample's stdev, a zero-minute player's FPPM, and a genuine zero are
-> indistinguishable. Guard with `GP > 1` (for stdevs) and `MINUTES_sum > 0` (for
-> rates) rather than filtering on the value.
+**3. Canonical player name — via `dim_players`.** Never take the name from a log row.
+See §7.
+
+**If you ever want parity with the maintainer's Excel numbers**, two conventions
+matter: the pipeline computes `FPPM` as `SUM(DK_POINTS) / SUM(MINUTES)` (not the mean
+of per-game ratios), and games started as `COUNT(STARTED = 'Y')`. Its stdevs are pandas
+defaults, i.e. **sample** (ddof=1), which is also SQLite's non-default — plain SQLite
+has no `STDDEV`, so you will be computing it yourself anyway.
 
 ---
 
 ## 6. Keys and the join model
 
 ```
-dim_players (PLAYER_ID PK, PLAYER_NAME)
+dim_players (PLAYER_ID PK, PLAYER_NAME)   ← canonical name
      ▲ PLAYER_ID          ▲ PLAYER_ID           ▲ PLAYER_ID
      │                     │                     │
 fantasy_logs          player_logs          player_absences
 (PLAYER_ID, DATE) U   (PLAYER_ID, DATE) U  (PLAYER_ID, DATE) U
-     │ TEAM ──► map_teams.RAW_TEAM_NAME ──► TEAM_ABBREVIATION
      │
-     └─ aggregated ─► fantasy_averages (SEASON_TYPE, PLAYER_ID, SEASON, TEAM)
-                            │
-                            └─ vw_player_averages_regular_season / _playoffs
-                                    │
-                                    └─ vw_daily_slate* (slate-scoped, ephemeral)
+     └─ TEAM ──► map_teams.RAW_TEAM_NAME ──► TEAM_ABBREVIATION
 ```
 
 - **Player-game grain:** `(PLAYER_ID, DATE)` — unique and indexed on all three log
   tables. Use this, not `(PLAYER_ID, GAME_ID)`.
-- **`GAME_ID`** identifies the *game*, so two players on the same team share it. It is
-  present and INTEGER in all three log tables, but is **not** part of any uniqueness
+- **`GAME_ID`** identifies the *game*, so teammates share it. Present and
+  integer-valued in all three log tables, but **not** part of any uniqueness
   constraint. It is the right key for "who else played in this game".
 - **Player identity:** `PLAYER_ID`. Stable, integer, and the only join key you should
   use between tables inside this DB.
-- **Team:** raw string in the log tables, abbreviation in `fantasy_averages`. `map_teams`
-  is the bridge. There is no team dimension table beyond it and no team ID.
-- **Season:** `SEASON_SEGMENT` (free text) in the log tables; `SEASON_TYPE` + `SEASON`
-  (parsed) only in `fantasy_averages`. If you need season on a log row, parse it the
-  same way `create_summary_tables.py` does (§5.6) — or replicate that derivation once
-  in your own repo and reuse it.
+- **Team:** raw string in the log tables; `map_teams` is the only bridge to an
+  abbreviation. There is no team dimension table and no team ID.
+- **Season:** `SEASON_SEGMENT` free text only — parse it yourself (§5.6).
 
 ---
 
@@ -480,94 +471,84 @@ names**, not `PLAYER_ID`. This is the highest-risk part of the integration.
    "A.J. Green" → "AJ Green", …). It is applied at every ingest point.
 2. **`fantasy_logs.PLAYER` / `player_logs.PLAYER` are per-file snapshots, not
    canonical.** They had `PLAYER_NAME_MAP` applied *as of the day that row was
-   ingested*, so a mapping added later is not reflected in older rows.
-   `create_summary_tables.py` deliberately **drops** `fantasy_logs.PLAYER` and re-joins
+   ingested*, so a mapping added later is not reflected in older rows. The pipeline's
+   own aggregation deliberately **drops** the log-table `PLAYER` and re-joins
    `dim_players.PLAYER_NAME`. **Do the same: join names from `dim_players`, never from
    the log tables.**
 3. **`run_db_patch.py` retroactively rewrites names** in `dim_players`, `fantasy_logs`,
-   `player_logs`, and `fantasy_averages` whenever a new mapping is added — but it is a
-   manual, one-off script. So names can change between your ingest runs. **Store
-   `PLAYER_ID` in `nba-dfs-stats-lab`, and treat names as a display attribute you
-   re-resolve at query time.** Do not use a name as a foreign key.
-4. **`PLAYER_NAME_MAP` lives in the pipeline repo, not in the DB.** If
-   `nba-dfs-stats-lab` needs it, either vendor a copy (and accept drift) or read it via
+   and `player_logs` whenever a new mapping is added — but it is a manual, one-off
+   script. So names can change between your ingest runs. **Store `PLAYER_ID`, and treat
+   names as a display attribute you re-resolve at query time.** Never use a name as a
+   foreign key.
+4. **`PLAYER_NAME_MAP` lives in the pipeline repo, not in the DB.** If you need it,
+   either vendor a copy (and accept drift) or import it via
    `from bigdataball.mappings import PLAYER_NAME_MAP` after `pip install -e` on the
    pipeline repo. A stale vendored copy is a silent-mismatch generator; prefer the
    import, or at minimum add a test that diffs the two.
 5. **The pipeline's own DK→DB matching is fuzzy** (`thefuzz.process.extractOne`,
-   accept at **score ≥ 90**, after an exact `PLAYER_NAME_MAP` pass). Unmatched names
-   are appended to `todo_mappings.txt` and emailed. If you reuse this approach for
-   historical projections, be aware a ≥90 threshold does make wrong matches on similar
-   names (Jr./Sr., brothers, common surnames) — **record the matched-to `PLAYER_ID`,
-   the score, and the original string** in your DB so a bad match is auditable and
-   fixable rather than baked in.
+   accept at **score ≥ 90**, after an exact `PLAYER_NAME_MAP` pass). If you reuse that
+   approach for historical projections, note that a ≥90 threshold does make wrong
+   matches on similar names (Jr./Sr., brothers, common surnames) — **record the matched
+   `PLAYER_ID`, the score, and the original string** so a bad match is auditable rather
+   than baked in.
 
-**Recommended resolution order for a historical projection name:**
-exact match on `dim_players.PLAYER_NAME` → `PLAYER_NAME_MAP` then exact → fuzzy with a
-recorded score → unresolved queue for manual mapping. Never silently drop an
-unresolved name.
+**Recommended resolution order for a historical projection name:** exact match on
+`dim_players.PLAYER_NAME` → apply `PLAYER_NAME_MAP` then exact → fuzzy with a recorded
+score → unresolved queue for manual mapping. Never silently drop an unresolved name.
 
 ---
 
 ## 8. Gotchas that will cost you a day
 
-1. **`vw_daily_slate*` are not analysis views.** They reflect one day's DKEntries.csv.
-   (§4)
-2. **A traded player has multiple `fantasy_averages` rows per season.** Re-weight by
-   `GP`, or use the `_sum` columns. (§5.6)
-3. **`L30FPPM` depends on the pipeline's run date, not the slate date.** (§5.6)
-4. **`fillna(0)` erases the difference between zero and undefined.** (§5.6)
-5. **`STARTED` is the string `'Y'`/`'N'`,** not 0/1 or a boolean. Same for `VENUE`
+1. **`STARTED` is the string `'Y'`/`'N'`,** not 0/1 or a boolean. Same for `VENUE`
    (`'R'`/`'H'`/`'N'`).
-6. **`player_logs` does not have `fantasy_logs`' plan-014 ID hardening.**
+2. **`player_logs` does not have `fantasy_logs`' plan-014 ID hardening.**
    `fantasy_logs` explicitly casts incoming IDs to int and declares `Integer()` on
-   insert; `player_logs` relies on pandas inferring int64 from a clean feed. It is
-   believed correct today, and the pipeline repo records it as a known,
-   investigate-only asymmetry — but it means `player_logs.PLAYER_ID` has no *declared*
-   integer type. Confirm with query 2 in §2 and consider `CAST(... AS INTEGER)` on that
-   side of any cross-table join if the check surprises you.
-7. **Everything derived is recomputed, not incremental.** `fantasy_averages` and all
-   views are rebuilt from the full log tables every run. Row counts and even
-   `rowid`s change. **Never store a `rowid` or a row's position as a reference.**
-8. **Duplicates are prevented, not impossible.** The UNIQUE indexes are created by
+   insert; `player_logs` relies on pandas inferring int64 from a clean feed. Believed
+   correct today, and the pipeline repo records it as a known, investigate-only
+   asymmetry — but it means `player_logs.PLAYER_ID` has no *declared* integer type.
+   Confirm with query 2 in §2 and consider `CAST(... AS INTEGER)` on that side of a
+   cross-table join if the check surprises you.
+3. **`rowid` is not stable.** `fantasy_logs` is dropped and rebuilt wholesale by
+   `patch_fantasy_id_types.py`, and `check_ingest_duplicates.py --remove` deletes rows.
+   **Never store a `rowid` or a row's ordinal position as a reference** — key on
+   `(PLAYER_ID, DATE)`.
+4. **Duplicates are prevented, not impossible.** The UNIQUE indexes are created by
    `ensure_unique_index()` at ingest and backfilled by `create_log_indexes.py`. A DB
-   copy that predates plan 012 and never had a run can lack them. Query 3 in §2.
-9. **Missing IDs are dropped, silently-ish.** `fantasy_logs` ingest drops rows with a
+   copy predating plan 012 that has never had a run can lack them. Query 3 in §2.
+5. **Missing IDs are dropped, silently-ish.** `fantasy_logs` ingest drops rows with a
    null `PLAYER_ID`/`GAME_ID` and reports the count in the success email only — a run
-   that both drops rows and fails a later stage reports only the failure. So the log
-   tables can be missing player-games with no visible trace in the DB.
-10. **`SEASON_SEGMENT` strings are the season source of truth and are free text.**
-    A BigDataBall format change (e.g. dropping "NBA") silently reclassifies rows or
-    drops them from `fantasy_averages`. If your counts disagree with the pipeline's,
-    check query 5 in §2 first.
+   that both drops rows and fails a later stage reports only the failure. The log
+   tables can therefore be missing player-games with no trace in the DB.
+6. **`SEASON_SEGMENT` is free text and is your only season source.** A BigDataBall
+   format change (e.g. dropping "NBA") would silently reclassify rows under the §5.6
+   rules. Assert on the distinct values (query 5 in §2) rather than trusting a
+   substring match forever.
+7. **`fantasy_logs` and `player_logs` are ingested independently** from different
+   feeds and may not cover identical date ranges. Don't assume a player-game in one is
+   present in the other; check before making either the spine of a join.
 
 ---
 
-## 9. Recommended integration pattern for `nba-dfs-stats-lab`
+## 9. Recommended integration pattern
 
-1. **Own your copy of what you need.** ATTACH read-only, `INSERT ... SELECT` into your
-   own tables, DETACH. Snapshot with an ingest timestamp and the source DB's `mtime`.
-   That gives you reproducible analysis even though `fantasy_averages` is rebuilt daily.
-2. **Key everything on `PLAYER_ID` + `DATE`.** Resolve projection/lineup player names to
+1. **Own your copy.** ATTACH read-only, `INSERT ... SELECT` into your own tables,
+   close. Snapshot with an ingest timestamp and the source DB's `mtime` so your
+   analysis is reproducible even though the source is rewritten daily.
+2. **Key everything on `PLAYER_ID` + `DATE`.** Resolve projection/lineup names to
    `PLAYER_ID` once, at ingest, storing the resolution method and score. Everything
    downstream joins on IDs.
-3. **Prefer `fantasy_logs` over `fantasy_averages` as your source.** The averages table
-   is a presentation artifact for Excel, with rounding, `fillna(0)`, a build-date-relative
-   L30 window, and per-team season splits. For a stats lab you want the per-game rows and
-   your own aggregation — especially so you can compute "as of slate date" features
-   without lookahead. Pull `fantasy_averages` only if you specifically want to reproduce
-   the numbers the maintainer's Excel workbook shows.
-4. **Guard against lookahead.** `fantasy_logs` contains the *outcome* (`DK_POINTS`) of
+3. **Guard against lookahead.** `fantasy_logs` contains the *outcome* (`DK_POINTS`) of
    every game. When joining a historical projection to actuals, be explicit about which
    columns are features (known pre-lock) and which are labels (known post-game).
    `DK_SALARY` and `DK_POSITION` are pre-lock; everything else in the row is post-game.
-5. **Absences are a first-class feature now.** `player_absences` with `ABSENCE_TYPE`
-   lets you model "who was out" for a slate — previously only inferable from a missing
-   box score, which conflates "injured" with "feed not yet ingested". Note the
-   `MIN(DATE)` coverage caveat in §5.3.
-6. **Record the source schema version.** Store the `sqlite_master` DDL hash (or at least
-   the column list of each table you read) with each snapshot. This document will go
-   stale; a recorded schema fingerprint turns "our numbers changed" into a diff.
+4. **Absences are a first-class feature.** `player_absences` with `ABSENCE_TYPE` lets
+   you model "who was out" for a slate — previously only inferable from a missing box
+   score, which conflates "injured" with "feed not yet ingested". Note the `MIN(DATE)`
+   coverage caveat in §5.3.
+5. **Record the source schema version.** Store the `sqlite_master` DDL hash (or at
+   least the column list of each table you read) with each snapshot. This document will
+   go stale; a recorded fingerprint turns "our numbers changed" into a diff.
 
 ---
 
@@ -581,12 +562,10 @@ Everything lives under `src/bigdataball/` in `JonnyRank/bigdataball-data`.
 | What writes `fantasy_logs`? | `daily_fantasy_log_upload.py` (inline loop in `main()`) |
 | What writes `player_logs`? | `daily_player_upload.py` |
 | What writes `player_absences`? | `absence_ingestion.py` (+ `backfill_player_absences.py`) |
-| What builds `fantasy_averages` and the averages views? | `create_summary_tables.py` |
-| What builds the slate views/CSVs? | `export_slate_averages_vw.py`, `export_playoffs_slate_averages_vw.py`, `export_slate_averages_csv.py`, `dk_matching.py` |
 | Canonical player names | `mappings.py` |
 | Team abbreviations / `map_teams` | `seed_map_teams.py` |
-| Season constants | `seasons.py` |
 | The UNIQUE indexes | `create_log_indexes.py`, `check_ingest_duplicates.py` |
 | The ID-type migration | `patch_fantasy_id_types.py` |
+| The derived objects you're *not* reading (§4) | `create_summary_tables.py`, `export_*.py`, `seasons.py` |
 | Architecture / conventions / known concerns | `docs/codebase/*.md`, `CLAUDE.md` |
 | Change history and rationale | `plans/README.md` and `plans/0NN-*.md` (012, 013, 014 are the relevant ones) |
