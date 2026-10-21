@@ -1,8 +1,8 @@
 # seasons.py
 # Season filters for the slate views and exports.
 # Update these THREE values at the start of each NBA season; nothing else changes.
-SLATE_SEASONS = ("2024-25", "2025-26")  # multi-season span for vw_daily_slate + main CSV
-L30_SEASON = "2025-26"                   # current regular season for L30 views/CSVs
+SLATE_SEASONS = ("2025-26", "2026-27")  # multi-season span for vw_daily_slate + main CSV
+L30_SEASON = "2026-27"                   # current regular season for L30 views/CSVs
 PLAYOFFS_SEASON = "2026"                 # current playoff year for vw_daily_slate_playoffs
 
 
