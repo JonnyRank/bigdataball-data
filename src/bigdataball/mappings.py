@@ -14,4 +14,5 @@ PLAYER_NAME_MAP = {
     "Craig Porter": "Craig Porter Jr.",
     "O.G. Anunoby": "OG Anunoby",
     "Trevon Scott": "Tre Scott",
+    "Morez Johnson Jr.": "Morez Johnson",
 }
