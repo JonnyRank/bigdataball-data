@@ -22,6 +22,7 @@ def verify_patch():
         "fantasy_logs": "PLAYER",
         "player_logs": "PLAYER",
         "fantasy_averages": "PLAYER",
+        "player_absences": "PLAYER"
     }
 
     print("Verifying updated player names in the database...\n")

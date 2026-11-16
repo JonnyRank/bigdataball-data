@@ -26,6 +26,7 @@ def fix_player_names():
         "fantasy_logs": "PLAYER",
         "player_logs": "PLAYER",
         "fantasy_averages": "PLAYER",
+        "player_absences": "PLAYER",
     }
 
     print("Starting retroactive player name correction across all relevant tables...")
