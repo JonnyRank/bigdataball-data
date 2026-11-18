@@ -15,5 +15,6 @@ PLAYER_NAME_MAP = {
     "O.G. Anunoby": "OG Anunoby",
     "Trevon Scott": "Tre Scott",
     "Morez Johnson Jr.": "Morez Johnson",
-    "Robert Williams III": "Robert Williams"
+    "Robert Williams III": "Robert Williams",
+    "Labaron Philon": "Labaron Philon Jr."
 }
